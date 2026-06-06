@@ -14,16 +14,18 @@ type EpubBook = {
   renderTo: (el: HTMLElement, opts: Record<string, unknown>) => EpubRendition;
   destroy: () => void;
 };
+type EpubContents = { document: Document };
 type EpubRendition = {
   display: (target?: string) => Promise<void>;
   next: () => Promise<void>;
   prev: () => Promise<void>;
+  manager?: { container?: HTMLElement };
+  hooks: { content: { register: (cb: (contents: EpubContents) => void) => void } };
   themes: {
     register: (name: string, styles: Record<string, Record<string, string>>) => void;
     select: (name: string) => void;
     fontSize: (size: string) => void;
     font: (font: string) => void;
-    override: (name: string, value: string, important?: boolean) => void;
   };
   on: (event: string, cb: (...args: unknown[]) => void) => void;
   destroy: () => void;
@@ -43,6 +45,7 @@ export class EpubReader implements Reader {
   private host: ReaderHost;
   private book: EpubBook | null = null;
   private rendition: EpubRendition | null = null;
+  private scrollEl: HTMLElement | null = null;
   private locationsReady = false;
 
   constructor(
@@ -59,6 +62,10 @@ export class EpubReader implements Reader {
     this.host = host;
   }
 
+  private get isContinuous(): boolean {
+    return this.settings.scrollMode === 'continuous';
+  }
+
   async mount(fileArrayBuffer: ArrayBuffer): Promise<void> {
     this.host.setLoading(true);
     const { default: Epub } = await import('epubjs');
@@ -70,25 +77,39 @@ export class EpubReader implements Reader {
 
     await book.ready;
 
-    // Use the "scrolled-doc" flow with the stable default manager. The
-    // "continuous" manager virtualises views and crashes under fast scrolling
-    // (ContinuousViewManager.trim -> removeChild NotFoundError -> white pages).
-    // scrolled-doc renders one section at a time as a scrollable document and
-    // is far more robust; we move between sections via next()/prev().
+    // "scrolled-continuous" gives true whole-book scrolling (sections load as
+    // you scroll). Its continuous view manager can throw a removeChild
+    // NotFoundError while trimming off-screen views during fast scrolling; we
+    // guard against that below by hardening the container's removeChild.
     const rendition = book.renderTo(this.container, {
       width: '100%',
       height: '100%',
-      flow: this.settings.scrollMode === 'continuous' ? 'scrolled-doc' : 'paginated',
-      manager: 'default',
+      flow: this.isContinuous ? 'scrolled-continuous' : 'paginated',
+      manager: this.isContinuous ? 'continuous' : 'default',
       spread: 'none',
       allowScriptedContent: false,
     });
     this.rendition = rendition;
 
+    // Strip the book's bundled <link> stylesheets (loaded as blob: URLs that
+    // Obsidian's CSP blocks anyway) and any <script> tags (the iframe is
+    // sandboxed without scripts). This removes the console spam and a source
+    // of layout churn; our injected theme handles styling.
+    rendition.hooks.content.register((contents: EpubContents) => {
+      const doc = contents.document;
+      doc.querySelectorAll('link[rel="stylesheet"], link[href^="blob:"], script').forEach((el) => el.remove());
+    });
+
     this.applyTheme(rendition);
 
     const savedCfi = this.progress.get(this.filePath);
     await rendition.display(typeof savedCfi === 'string' ? savedCfi : undefined);
+
+    // Grab the manager's scroll container and harden it against the
+    // continuous-manager removeChild crash.
+    this.scrollEl = rendition.manager?.container ?? null;
+    this.hardenRemoveChild(this.scrollEl);
+
     this.host.setLoading(false);
 
     rendition.on('relocated', (location: { start: { cfi: string } }) => {
@@ -98,7 +119,6 @@ export class EpubReader implements Reader {
     });
 
     // Generate locations in the background to enable global page numbers.
-    // This can take a moment for large books, so it doesn't block first paint.
     book.locations
       .generate(1024)
       .then(() => {
@@ -107,6 +127,23 @@ export class EpubReader implements Reader {
       .catch(() => {
         /* locations are best-effort */
       });
+  }
+
+  /**
+   * epub.js's continuous manager calls container.removeChild(view) while
+   * trimming views, and under fast scrolling the node has sometimes already
+   * been detached, throwing NotFoundError and killing the render queue
+   * (blank/white pages). Wrap removeChild to no-op safely in that case.
+   */
+  private hardenRemoveChild(el: HTMLElement | null): void {
+    if (!el) return;
+    const original = el.removeChild.bind(el);
+    el.removeChild = function <T extends Node>(child: T): T {
+      if (child && child.parentNode === el) {
+        return original(child) as T;
+      }
+      return child; // already removed / not a child — ignore safely
+    };
   }
 
   private reportProgress(cfi: string): void {
@@ -143,6 +180,12 @@ export class EpubReader implements Reader {
 
   navigate(dir: 1 | -1): void {
     if (!this.rendition) return;
+    if (this.isContinuous && this.scrollEl) {
+      // Continuous scroll: move by a screenful, not a whole section.
+      this.scrollEl.scrollBy({ top: dir * this.scrollEl.clientHeight * 0.9, behavior: 'smooth' });
+      return;
+    }
+    // Paginated: turn the page.
     this.host.setLoading(true);
     const move = dir > 0 ? this.rendition.next() : this.rendition.prev();
     Promise.resolve(move).finally(() => this.host.setLoading(false));
@@ -160,5 +203,6 @@ export class EpubReader implements Reader {
     this.book?.destroy();
     this.rendition = null;
     this.book = null;
+    this.scrollEl = null;
   }
 }
