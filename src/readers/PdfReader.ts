@@ -1,5 +1,6 @@
 import type { PluginSettings } from '../settings/settings';
 import type { ProgressManager } from '../reading-progress/ProgressManager';
+import type { Reader, ReaderHost } from '../types';
 
 type PDFDocumentProxy = {
   numPages: number;
@@ -18,13 +19,15 @@ const THEME_BG: Record<string, string> = {
   sepia: '#f4ecd8',
 };
 
-export class PdfReader {
+export class PdfReader implements Reader {
   private container: HTMLElement;
   private scrollEl: HTMLElement;
   private filePath: string;
   private settings: PluginSettings;
   private progress: ProgressManager;
+  private host: ReaderHost;
   private pdf: PDFDocumentProxy | null = null;
+  private numPages = 0;
   private renderTasks: Array<{ cancel: () => void }> = [];
   private observers: IntersectionObserver[] = [];
   private pageEls: HTMLElement[] = [];
@@ -34,11 +37,13 @@ export class PdfReader {
     filePath: string,
     settings: PluginSettings,
     progress: ProgressManager,
+    host: ReaderHost,
   ) {
     this.container = container;
     this.filePath = filePath;
     this.settings = settings;
     this.progress = progress;
+    this.host = host;
 
     this.scrollEl = container.createDiv({ cls: 'rr-pdf-scroll' });
   }
@@ -46,7 +51,7 @@ export class PdfReader {
   async mount(fileArrayBuffer: ArrayBuffer): Promise<void> {
     const pdfjsLib = await import('pdfjs-dist');
     // Use fake worker (runs on main thread) — avoids bundling/URL issues in Obsidian.
-    // For large PDFs the IntersectionObserver strategy limits concurrent work so this stays responsive.
+    // The IntersectionObserver strategy limits concurrent work so this stays responsive.
     pdfjsLib.GlobalWorkerOptions.workerSrc = '';
 
     this.container.addClass('rr-pdf-container');
@@ -54,14 +59,16 @@ export class PdfReader {
 
     const pdf = await pdfjsLib.getDocument({ data: fileArrayBuffer }).promise;
     this.pdf = pdf as unknown as PDFDocumentProxy;
+    this.numPages = pdf.numPages;
 
     const savedPage = this.progress.get(this.filePath);
     const startPage = typeof savedPage === 'number' ? savedPage : 1;
 
     await this.buildPagePlaceholders(pdf.numPages);
-    this.setupScrollTracking(startPage);
+    this.setupScrollTracking();
 
-    // Scroll to last read page after placeholders are built
+    this.host.setProgress(startPage, this.numPages);
+
     if (startPage > 1 && this.pageEls[startPage - 1]) {
       this.pageEls[startPage - 1].scrollIntoView();
     }
@@ -72,7 +79,6 @@ export class PdfReader {
   }
 
   private async buildPagePlaceholders(numPages: number): Promise<void> {
-    // Build placeholder divs; actual rendering is deferred to IntersectionObserver
     for (let i = 1; i <= numPages; i++) {
       const pageWrapper = this.scrollEl.createDiv({ cls: 'rr-pdf-page-wrapper' });
       pageWrapper.dataset.page = String(i);
@@ -119,7 +125,7 @@ export class PdfReader {
     page.cleanup();
   }
 
-  private setupScrollTracking(startPage: number): void {
+  private setupScrollTracking(): void {
     let ticking = false;
     this.scrollEl.addEventListener('scroll', () => {
       if (ticking) return;
@@ -131,13 +137,16 @@ export class PdfReader {
           if (el.offsetTop + el.clientHeight > midY) {
             const page = Number(el.dataset.page);
             this.progress.save(this.filePath, page);
+            this.host.setProgress(page, this.numPages);
             break;
           }
         }
       });
     }, { passive: true });
+  }
 
-    void startPage; // used above at mount time
+  navigate(dir: 1 | -1): void {
+    this.scrollEl.scrollBy({ top: dir * this.scrollEl.clientHeight * 0.9, behavior: 'smooth' });
   }
 
   applySettings(settings: PluginSettings): void {

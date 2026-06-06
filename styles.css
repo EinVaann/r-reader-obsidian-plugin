@@ -1,33 +1,77 @@
 /* ---- R Reader: root shell ---- */
 .rr-reader-root {
+  position: relative;
   width: 100%;
   height: 100%;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   font-family: var(--rr-font-family, Georgia, serif);
   font-size: var(--rr-font-size, 18px);
   line-height: var(--rr-line-height, 1.6);
-  contain: strict;
-  will-change: transform;
 }
 
-/* ---- EPUB container ---- */
+/* ---- Top bar ---- */
+.rr-topbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+}
+
+.rr-page-indicator {
+  flex: 1 1 auto;
+  text-align: center;
+  font-size: 13px;
+  font-family: var(--font-interface);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.rr-iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-normal);
+  cursor: pointer;
+  box-shadow: none;
+}
+.rr-iconbtn:hover {
+  background: var(--background-modifier-hover);
+}
+
+/* ---- Content area (the actual reader mounts here) ---- */
+.rr-content {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  /* layout/paint containment only — NO size containment (breaks epub.js height) */
+  contain: layout paint;
+}
+
+/* ---- EPUB ---- */
 .rr-epub-container {
   width: 100%;
   height: 100%;
-  overflow: hidden;
 }
-
 .rr-epub-container iframe {
   border: none;
 }
 
-/* ---- PDF container ---- */
+/* ---- PDF ---- */
 .rr-pdf-container {
   width: 100%;
   height: 100%;
-  overflow: hidden;
 }
-
 .rr-pdf-scroll {
   width: 100%;
   height: 100%;
@@ -41,17 +85,65 @@
   padding: 16px 0;
   will-change: transform;
 }
-
 .rr-pdf-page-wrapper {
   width: 100%;
   max-width: 900px;
   display: flex;
   justify-content: center;
 }
-
 .rr-pdf-canvas {
   display: block;
   max-width: 100%;
   height: auto;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* ---- Quick settings popover ---- */
+.rr-quick-settings {
+  position: absolute;
+  top: 44px;
+  right: 10px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+  font-family: var(--font-interface);
+  min-width: 220px;
+}
+.rr-qs-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.rr-qs-label {
+  flex: 1 1 auto;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.rr-qs-value {
+  min-width: 42px;
+  text-align: center;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.rr-qs-chip {
+  padding: 3px 10px;
+  border-radius: 6px;
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  cursor: pointer;
+  font-size: 12px;
+  text-transform: capitalize;
+}
+.rr-qs-chip:hover {
+  background: var(--background-modifier-hover);
+}
+.rr-qs-chip.is-active {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
 }
