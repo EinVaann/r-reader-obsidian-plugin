@@ -1,0 +1,57 @@
+/* ---- R Reader: root shell ---- */
+.rr-reader-root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--rr-font-family, Georgia, serif);
+  font-size: var(--rr-font-size, 18px);
+  line-height: var(--rr-line-height, 1.6);
+  contain: strict;
+  will-change: transform;
+}
+
+/* ---- EPUB container ---- */
+.rr-epub-container {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.rr-epub-container iframe {
+  border: none;
+}
+
+/* ---- PDF container ---- */
+.rr-pdf-container {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.rr-pdf-scroll {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 0;
+  will-change: transform;
+}
+
+.rr-pdf-page-wrapper {
+  width: 100%;
+  max-width: 900px;
+  display: flex;
+  justify-content: center;
+}
+
+.rr-pdf-canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+}

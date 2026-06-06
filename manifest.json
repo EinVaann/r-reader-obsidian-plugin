@@ -1,0 +1,10 @@
+{
+  "id": "r-reader",
+  "name": "R Reader",
+  "version": "1.0.0",
+  "minAppVersion": "1.4.0",
+  "description": "A polished, mobile-friendly reader for EPUB and PDF files with custom fonts, themes, and reading progress.",
+  "author": "EinVaann",
+  "authorUrl": "https://github.com/EinVaann",
+  "isDesktopOnly": false
+}
