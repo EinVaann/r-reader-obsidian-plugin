@@ -17,6 +17,7 @@ export class ReaderView extends FileView implements ReaderHost {
   private contentArea: HTMLElement | null = null;
   private pageIndicator: HTMLElement | null = null;
   private settingsPanel: HTMLElement | null = null;
+  private loadingEl: HTMLElement | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: RReaderPlugin) {
     super(leaf);
@@ -37,6 +38,10 @@ export class ReaderView extends FileView implements ReaderHost {
     this.pageIndicator.setText(total > 0 ? `${current} / ${total}` : '…');
   }
 
+  setLoading(loading: boolean): void {
+    this.loadingEl?.toggleClass('is-visible', loading);
+  }
+
   async onLoadFile(file: TFile): Promise<void> {
     this.contentEl.empty();
     this.reader?.destroy();
@@ -52,6 +57,11 @@ export class ReaderView extends FileView implements ReaderHost {
 
     const content = root.createDiv({ cls: 'rr-content' });
     this.contentArea = content;
+
+    const overlay = content.createDiv({ cls: 'rr-loading is-visible' });
+    overlay.createDiv({ cls: 'rr-spinner' });
+    overlay.createDiv({ cls: 'rr-loading-text', text: 'Loading…' });
+    this.loadingEl = overlay;
 
     const arrayBuffer = await this.app.vault.readBinary(file);
     const ext = file.extension.toLowerCase();
@@ -172,6 +182,7 @@ export class ReaderView extends FileView implements ReaderHost {
     this.contentArea = null;
     this.pageIndicator = null;
     this.settingsPanel = null;
+    this.loadingEl = null;
   }
 
   async onClose(): Promise<void> {

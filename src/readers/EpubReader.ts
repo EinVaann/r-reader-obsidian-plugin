@@ -60,6 +60,7 @@ export class EpubReader implements Reader {
   }
 
   async mount(fileArrayBuffer: ArrayBuffer): Promise<void> {
+    this.host.setLoading(true);
     const { default: Epub } = await import('epubjs');
 
     this.container.addClass('rr-epub-container');
@@ -69,11 +70,16 @@ export class EpubReader implements Reader {
 
     await book.ready;
 
+    // Use the "scrolled-doc" flow with the stable default manager. The
+    // "continuous" manager virtualises views and crashes under fast scrolling
+    // (ContinuousViewManager.trim -> removeChild NotFoundError -> white pages).
+    // scrolled-doc renders one section at a time as a scrollable document and
+    // is far more robust; we move between sections via next()/prev().
     const rendition = book.renderTo(this.container, {
       width: '100%',
       height: '100%',
-      flow: this.settings.scrollMode === 'continuous' ? 'scrolled-continuous' : 'paginated',
-      manager: this.settings.scrollMode === 'continuous' ? 'continuous' : 'default',
+      flow: this.settings.scrollMode === 'continuous' ? 'scrolled-doc' : 'paginated',
+      manager: 'default',
       spread: 'none',
       allowScriptedContent: false,
     });
@@ -83,6 +89,7 @@ export class EpubReader implements Reader {
 
     const savedCfi = this.progress.get(this.filePath);
     await rendition.display(typeof savedCfi === 'string' ? savedCfi : undefined);
+    this.host.setLoading(false);
 
     rendition.on('relocated', (location: { start: { cfi: string } }) => {
       const cfi = location.start.cfi;
@@ -136,8 +143,9 @@ export class EpubReader implements Reader {
 
   navigate(dir: 1 | -1): void {
     if (!this.rendition) return;
-    if (dir > 0) void this.rendition.next();
-    else void this.rendition.prev();
+    this.host.setLoading(true);
+    const move = dir > 0 ? this.rendition.next() : this.rendition.prev();
+    Promise.resolve(move).finally(() => this.host.setLoading(false));
   }
 
   applySettings(settings: PluginSettings): void {

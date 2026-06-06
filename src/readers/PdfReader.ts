@@ -49,6 +49,7 @@ export class PdfReader implements Reader {
   }
 
   async mount(fileArrayBuffer: ArrayBuffer): Promise<void> {
+    this.host.setLoading(true);
     const pdfjsLib = await import('pdfjs-dist');
     // Use fake worker (runs on main thread) — avoids bundling/URL issues in Obsidian.
     // The IntersectionObserver strategy limits concurrent work so this stays responsive.
@@ -72,6 +73,7 @@ export class PdfReader implements Reader {
     if (startPage > 1 && this.pageEls[startPage - 1]) {
       this.pageEls[startPage - 1].scrollIntoView();
     }
+    this.host.setLoading(false);
   }
 
   private applyBackground(): void {

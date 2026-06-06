@@ -4,6 +4,8 @@ import type { PluginSettings } from './settings/settings';
 export interface ReaderHost {
   /** Report reading progress so the top bar can show "current / total". */
   setProgress(current: number, total: number): void;
+  /** Toggle the loading overlay while content is being rendered. */
+  setLoading(loading: boolean): void;
 }
 
 /** Common interface implemented by every format reader. */
