@@ -12,6 +12,7 @@ type CapacitorApp = {
 export class MobileControls {
   private el: HTMLElement;
   private onNavigate: (dir: 1 | -1) => void;
+  private onToggleChrome: () => void;
   private removeVolUp?: () => void;
   private removeVolDown?: () => void;
   private touchStartY = 0;
@@ -19,9 +20,10 @@ export class MobileControls {
   private touchHandlerStart?: (e: TouchEvent) => void;
   private touchHandlerEnd?: (e: TouchEvent) => void;
 
-  constructor(el: HTMLElement, onNavigate: (dir: 1 | -1) => void) {
+  constructor(el: HTMLElement, onNavigate: (dir: 1 | -1) => void, onToggleChrome: () => void) {
     this.el = el;
     this.onNavigate = onNavigate;
+    this.onToggleChrome = onToggleChrome;
   }
 
   mount(): void {
@@ -65,7 +67,7 @@ export class MobileControls {
 
       if (relY < zone) this.onNavigate(-1);
       else if (relY > zone * 2) this.onNavigate(1);
-      // Middle third: reserved for toggling UI chrome later
+      else this.onToggleChrome(); // middle third toggles the top/bottom bars
     };
 
     this.el.addEventListener('touchstart', this.touchHandlerStart, { passive: true });

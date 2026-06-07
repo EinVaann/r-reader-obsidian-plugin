@@ -186,7 +186,16 @@ export class EpubReader implements Reader {
     if (!el) return;
     const totalScreens = Math.max(1, Math.ceil(el.scrollHeight / el.clientHeight));
     const currentScreen = Math.min(totalScreens, Math.floor(el.scrollTop / el.clientHeight) + 1);
-    this.host.setProgress(currentScreen, totalScreens);
+    const max = el.scrollHeight - el.clientHeight;
+    const fraction = max > 0 ? el.scrollTop / max : 0;
+    this.host.setProgress(currentScreen, totalScreens, fraction);
+  }
+
+  seek(fraction: number): void {
+    const el = this.scrollEl;
+    if (!el) return;
+    const max = el.scrollHeight - el.clientHeight;
+    el.scrollTop = Math.max(0, Math.min(1, fraction)) * max;
   }
 
   private saveProgress(): void {

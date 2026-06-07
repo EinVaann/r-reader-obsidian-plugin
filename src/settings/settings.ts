@@ -8,6 +8,8 @@ export interface PluginSettings {
   lineHeight: number;
   scrollMode: ScrollMode;
   touchToScroll: boolean;
+  /** On mobile, start with the top/bottom bars hidden (tap center to show). */
+  hideBarsOnMobile: boolean;
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -17,4 +19,5 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   lineHeight: 1.6,
   scrollMode: 'continuous',
   touchToScroll: true,
+  hideBarsOnMobile: false,
 };

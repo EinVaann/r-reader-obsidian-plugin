@@ -70,12 +70,24 @@ export class RReaderSettingsTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('Touch-to-scroll (mobile)')
-      .setDesc('Tap top/bottom thirds of screen to scroll up/down')
+      .setDesc('Tap top/bottom thirds of screen to scroll; tap center to toggle bars')
       .addToggle((t) =>
         t
           .setValue(this.plugin.settings.touchToScroll)
           .onChange(async (v) => {
             this.plugin.settings.touchToScroll = v;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Hide bars on mobile')
+      .setDesc('Start in full-screen reading mode; tap the center of the screen to show the bars')
+      .addToggle((t) =>
+        t
+          .setValue(this.plugin.settings.hideBarsOnMobile)
+          .onChange(async (v) => {
+            this.plugin.settings.hideBarsOnMobile = v;
             await this.plugin.saveSettings();
           }),
       );

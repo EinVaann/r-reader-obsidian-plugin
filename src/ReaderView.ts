@@ -1,7 +1,9 @@
-import { FileView, TFile, WorkspaceLeaf, setIcon } from 'obsidian';
+import { FileView, Platform, TFile, WorkspaceLeaf, setIcon } from 'obsidian';
 import type RReaderPlugin from '../main';
 import { EpubReader } from './readers/EpubReader';
 import { MobileControls } from './mobile/MobileControls';
+import type { Reader, ReaderHost } from './types';
+import type { Theme } from './settings/settings';
 
 /** Curated reading fonts offered in the quick-settings popover. */
 const FONT_OPTIONS: { label: string; value: string }[] = [
@@ -14,8 +16,6 @@ const FONT_OPTIONS: { label: string; value: string }[] = [
   { label: 'Fira Code', value: '"Fira Code", ui-monospace, "Courier New", monospace' },
   { label: 'Monospace', value: '"Courier New", ui-monospace, monospace' },
 ];
-import type { Reader, ReaderHost } from './types';
-import type { Theme } from './settings/settings';
 
 export const READER_VIEW_TYPE = 'r-reader-view';
 
@@ -29,6 +29,10 @@ export class ReaderView extends FileView implements ReaderHost {
   private pageIndicator: HTMLElement | null = null;
   private settingsPanel: HTMLElement | null = null;
   private loadingEl: HTMLElement | null = null;
+  private slider: HTMLInputElement | null = null;
+  private sliderLabel: HTMLElement | null = null;
+  private sliderActive = false;
+  private chromeHidden = false;
 
   constructor(leaf: WorkspaceLeaf, plugin: RReaderPlugin) {
     super(leaf);
@@ -44,9 +48,14 @@ export class ReaderView extends FileView implements ReaderHost {
   }
 
   // --- ReaderHost ---
-  setProgress(current: number, total: number): void {
-    if (!this.pageIndicator) return;
-    this.pageIndicator.setText(total > 0 ? `${current} / ${total}` : '…');
+  setProgress(current: number, total: number, fraction: number): void {
+    const text = total > 0 ? `${current} / ${total}` : '…';
+    this.pageIndicator?.setText(text);
+    this.sliderLabel?.setText(text);
+    // Don't fight the user while they're dragging the slider.
+    if (this.slider && !this.sliderActive) {
+      this.slider.value = String(Math.round(fraction * 1000));
+    }
   }
 
   setLoading(loading: boolean): void {
@@ -60,7 +69,11 @@ export class ReaderView extends FileView implements ReaderHost {
 
     const { settings } = this.plugin;
 
+    // Full-bleed: drop Obsidian's default view padding.
+    this.contentEl.style.padding = '0';
+
     const root = this.contentEl.createDiv({ cls: 'rr-reader-root' });
+    if (Platform.isMobile) root.addClass('rr-mobile');
     this.applyCssVars(root);
     this.rootEl = root;
 
@@ -74,6 +87,9 @@ export class ReaderView extends FileView implements ReaderHost {
     overlay.createDiv({ cls: 'rr-loading-text', text: 'Loading…' });
     this.loadingEl = overlay;
 
+    // Bottom progress bar with a scrub slider (primary navigation on mobile).
+    this.buildBottomBar(root);
+
     const arrayBuffer = await this.app.vault.readBinary(file);
     const ext = file.extension.toLowerCase();
 
@@ -86,9 +102,18 @@ export class ReaderView extends FileView implements ReaderHost {
 
     await this.reader.mount(arrayBuffer);
 
-    if (settings.touchToScroll) {
-      this.mobile = new MobileControls(content, (dir) => this.reader?.navigate(dir));
+    if (Platform.isMobile && settings.touchToScroll) {
+      this.mobile = new MobileControls(
+        content,
+        (dir) => this.reader?.navigate(dir),
+        () => this.toggleChrome(),
+      );
       this.mobile.mount();
+    }
+
+    // Start immersive on mobile if the user opted in.
+    if (Platform.isMobile && settings.hideBarsOnMobile) {
+      this.setChromeHidden(true);
     }
   }
 
@@ -115,6 +140,35 @@ export class ReaderView extends FileView implements ReaderHost {
     const gear = bar.createEl('button', { cls: 'rr-iconbtn rr-gear', attr: { 'aria-label': 'Reader settings' } });
     setIcon(gear, 'settings-2');
     gear.onclick = () => this.toggleSettingsPanel(root);
+  }
+
+  private buildBottomBar(root: HTMLElement): void {
+    const bar = root.createDiv({ cls: 'rr-bottombar' });
+
+    const slider = bar.createEl('input', {
+      cls: 'rr-slider',
+      attr: { type: 'range', min: '0', max: '1000', value: '0', 'aria-label': 'Reading progress' },
+    }) as HTMLInputElement;
+    this.slider = slider;
+    this.sliderLabel = bar.createDiv({ cls: 'rr-slider-label', text: '…' });
+
+    slider.addEventListener('input', () => {
+      this.sliderActive = true;
+      this.reader?.seek(Number(slider.value) / 1000);
+    });
+    const release = () => { this.sliderActive = false; };
+    slider.addEventListener('change', release);
+    slider.addEventListener('pointerup', release);
+    slider.addEventListener('touchend', release);
+  }
+
+  private toggleChrome(): void {
+    this.setChromeHidden(!this.chromeHidden);
+  }
+
+  private setChromeHidden(hidden: boolean): void {
+    this.chromeHidden = hidden;
+    this.rootEl?.toggleClass('rr-chrome-hidden', hidden);
   }
 
   private toggleSettingsPanel(root: HTMLElement): void {
@@ -244,6 +298,10 @@ export class ReaderView extends FileView implements ReaderHost {
     this.pageIndicator = null;
     this.settingsPanel = null;
     this.loadingEl = null;
+    this.slider = null;
+    this.sliderLabel = null;
+    this.sliderActive = false;
+    this.chromeHidden = false;
   }
 
   async onClose(): Promise<void> {

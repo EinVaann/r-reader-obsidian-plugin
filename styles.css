@@ -111,6 +111,69 @@
   to { transform: rotate(360deg); }
 }
 
+/* ---- Bottom progress bar + slider ---- */
+.rr-bottombar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  border-top: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+}
+.rr-slider {
+  flex: 1 1 auto;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--background-modifier-border);
+  cursor: pointer;
+  margin: 0;
+}
+.rr-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--interactive-accent);
+  cursor: pointer;
+}
+.rr-slider-label {
+  flex: 0 0 auto;
+  min-width: 64px;
+  text-align: right;
+  font-size: 12px;
+  font-family: var(--font-interface);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Immersive: hide top/bottom chrome ---- */
+.rr-chrome-hidden .rr-topbar,
+.rr-chrome-hidden .rr-bottombar {
+  display: none;
+}
+
+/* ---- Mobile layout ---- */
+.rr-mobile .rr-topbar {
+  justify-content: flex-end;
+  padding-top: calc(6px + env(safe-area-inset-top));
+}
+/* On mobile the page index lives in the bottom slider, not the top bar. */
+.rr-mobile .rr-topbar .rr-page-indicator,
+.rr-mobile .rr-topbar .rr-iconbtn:not(.rr-gear) {
+  display: none;
+}
+.rr-mobile .rr-bottombar {
+  padding-bottom: calc(6px + env(safe-area-inset-bottom));
+}
+.rr-mobile .rr-epub-content {
+  padding-left: 0.8em;
+  padding-right: 0.8em;
+}
+
 /* ---- Quick settings popover ---- */
 .rr-quick-settings {
   position: absolute;
