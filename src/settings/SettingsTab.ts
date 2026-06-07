@@ -81,6 +81,21 @@ export class RReaderSettingsTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName('Show EPUB files on all devices')
+      .setDesc(
+        'Enables Obsidian\'s "Detect all file extensions" automatically. Because this plugin setting syncs with your vault, EPUB files show up on every device without changing each device\'s own settings.',
+      )
+      .addToggle((t) =>
+        t
+          .setValue(this.plugin.settings.detectAllExtensions)
+          .onChange(async (v) => {
+            this.plugin.settings.detectAllExtensions = v;
+            await this.plugin.saveSettings();
+            this.plugin.applyFileVisibility();
+          }),
+      );
+
+    new Setting(containerEl)
       .setName('Hide bars on mobile')
       .setDesc('Start in full-screen reading mode; tap the center of the screen to show the bars')
       .addToggle((t) =>

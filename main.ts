@@ -28,6 +28,7 @@ export default class RReaderPlugin extends Plugin {
 
     this.registerView(READER_VIEW_TYPE, (leaf) => new ReaderView(leaf, this));
     this.registerExtensions(['epub'], READER_VIEW_TYPE);
+    this.applyFileVisibility();
 
     // "ResizeObserver loop completed with undelivered notifications" is a benign
     // browser warning (the spec defines it as non-fatal). Reflowing reader
@@ -53,6 +54,25 @@ export default class RReaderPlugin extends Plugin {
         this.app.workspace.revealLeaf(leaves[0]);
       }
     });
+  }
+
+  /**
+   * Apply Obsidian's "Detect all file extensions" (vault config
+   * `showUnsupportedFiles`) so EPUB files are visible in the file explorer.
+   * registerExtensions already makes them openable, but enabling this ensures
+   * they appear on every device — driven by our synced plugin setting rather
+   * than each device's local (unsynced) Obsidian config.
+   */
+  applyFileVisibility(): void {
+    if (!this.settings.detectAllExtensions) return;
+    const vault = this.app.vault as unknown as {
+      getConfig?: (key: string) => unknown;
+      setConfig?: (key: string, value: unknown) => void;
+    };
+    if (typeof vault.setConfig !== 'function') return;
+    if (!vault.getConfig?.('showUnsupportedFiles')) {
+      vault.setConfig('showUnsupportedFiles', true);
+    }
   }
 
   /** Persist settings and reading progress together. */

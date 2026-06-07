@@ -10,6 +10,9 @@ export interface PluginSettings {
   touchToScroll: boolean;
   /** On mobile, start with the top/bottom bars hidden (tap center to show). */
   hideBarsOnMobile: boolean;
+  /** Apply Obsidian's "detect all file extensions" on load. This plugin
+   *  setting syncs via data.json, so EPUBs show on every device. */
+  detectAllExtensions: boolean;
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -20,4 +23,5 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   scrollMode: 'continuous',
   touchToScroll: true,
   hideBarsOnMobile: false,
+  detectAllExtensions: true,
 };
