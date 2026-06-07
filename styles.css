@@ -148,7 +148,10 @@
   background: var(--background-secondary);
 }
 .rr-slider {
+  display: block;
   width: 100%;
+  box-sizing: border-box;
+  align-self: stretch;
   -webkit-appearance: none;
   appearance: none;
   height: 4px;
@@ -156,6 +159,12 @@
   background: var(--background-modifier-border);
   cursor: pointer;
   margin: 0;
+}
+.rr-slider::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: transparent;
 }
 .rr-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
@@ -185,6 +194,13 @@ body.rr-immersive .view-header,
 body.rr-immersive .mobile-navbar,
 body.rr-immersive .status-bar {
   display: none !important;
+}
+/* In immersive mode our bars are gone, so inset the content past the device's
+   system status bar (top) and navigation/gesture bar (bottom) so text isn't
+   clipped. env() with a fallback for devices that don't report safe areas. */
+.rr-mobile.rr-chrome-hidden .rr-content {
+  top: max(env(safe-area-inset-top), 32px);
+  bottom: max(env(safe-area-inset-bottom), 20px);
 }
 
 /* ---- Mobile layout ---- */
