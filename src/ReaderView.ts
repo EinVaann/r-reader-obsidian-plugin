@@ -121,10 +121,25 @@ export class ReaderView extends FileView implements ReaderHost {
       this.mobile.mount();
     }
 
+    // Position the bottom bar above Obsidian's own mobile navbar.
+    if (Platform.isMobile) {
+      this.measureMobileNavbar();
+      requestAnimationFrame(() => this.measureMobileNavbar());
+      this.registerDomEvent(window, 'resize', () => this.measureMobileNavbar());
+    }
+
     // Start immersive on mobile if the user opted in.
     if (Platform.isMobile && settings.hideBarsOnMobile) {
       this.setChromeHidden(true);
     }
+  }
+
+  /** Measure Obsidian's mobile bottom navbar so our bottom bar can sit above it. */
+  private measureMobileNavbar(): void {
+    if (!this.rootEl) return;
+    const navbar = document.body.querySelector<HTMLElement>('.mobile-navbar');
+    const h = navbar && navbar.offsetParent !== null ? navbar.offsetHeight : 0;
+    this.rootEl.style.setProperty('--rr-navbar-h', `${h}px`);
   }
 
   private applyCssVars(el: HTMLElement): void {
@@ -184,6 +199,13 @@ export class ReaderView extends FileView implements ReaderHost {
   private setChromeHidden(hidden: boolean): void {
     this.chromeHidden = hidden;
     this.rootEl?.toggleClass('rr-chrome-hidden', hidden);
+    // Also hide Obsidian's own mobile chrome (view header + bottom navbar) for
+    // a true full-screen read. Scoped to a body class we remove on teardown.
+    if (Platform.isMobile) {
+      document.body.toggleClass('rr-immersive', hidden);
+      // When bars return, Obsidian's navbar reappears — re-measure the offset.
+      if (!hidden) requestAnimationFrame(() => this.measureMobileNavbar());
+    }
     // Hiding the bars should also dismiss the open settings popover.
     if (hidden && this.settingsPanel) {
       this.settingsPanel.remove();
@@ -309,6 +331,8 @@ export class ReaderView extends FileView implements ReaderHost {
   }
 
   private teardown(): void {
+    // Always restore Obsidian's chrome when leaving the reader.
+    document.body.removeClass('rr-immersive');
     this.reader?.destroy();
     this.reader = null;
     this.mobile?.unmount();

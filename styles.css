@@ -180,6 +180,13 @@
   display: none;
 }
 
+/* Hide Obsidian's own mobile chrome for a full-screen read. */
+body.rr-immersive .view-header,
+body.rr-immersive .mobile-navbar,
+body.rr-immersive .status-bar {
+  display: none !important;
+}
+
 /* ---- Mobile layout ---- */
 /* On mobile the bars FLOAT over the content (pinned to the screen edges), so
    they can't be pushed off-screen by WebView height quirks. */
@@ -201,8 +208,8 @@
   padding-top: calc(6px + env(safe-area-inset-top));
 }
 .rr-mobile .rr-bottombar {
-  bottom: 0;
-  padding-bottom: calc(8px + env(safe-area-inset-bottom));
+  /* Sit above Obsidian's own bottom navbar (height measured at runtime). */
+  bottom: var(--rr-navbar-h, 50px);
   box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.25);
 }
 /* On mobile the page index lives in the bottom slider, not the top bar. */
