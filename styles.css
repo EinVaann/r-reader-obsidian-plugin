@@ -210,9 +210,12 @@ body.rr-immersive .status-bar {
 /* In immersive mode our bars are gone, so inset the content past the device's
    system status bar (top) and navigation/gesture bar (bottom) so text isn't
    clipped. env() with a fallback for devices that don't report safe areas. */
-/* No top padding in immersive either; keep a small bottom inset for the nav bar. */
-.rr-mobile.rr-chrome-hidden .rr-content {
-  bottom: max(env(safe-area-inset-bottom), 24px);
+/* Immersive on mobile: fill the entire device viewport (under the status bar,
+   over Obsidian's layout) for true full-screen reading. */
+.rr-reader-root.rr-mobile.rr-chrome-hidden {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
 }
 
 /* ---- Mobile layout ---- */
