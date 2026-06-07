@@ -139,10 +139,8 @@
 /* ---- Bottom progress bar + slider ---- */
 .rr-bottombar {
   flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 6px;
+  /* Block layout (not flex): guarantees the range input fills full width. */
+  display: block;
   padding: 8px 14px;
   border-top: 1px solid var(--background-modifier-border);
   background: var(--background-secondary);
@@ -151,7 +149,6 @@
   display: block;
   width: 100%;
   box-sizing: border-box;
-  align-self: stretch;
   -webkit-appearance: none;
   appearance: none;
   height: 4px;
@@ -176,7 +173,9 @@
   cursor: pointer;
 }
 .rr-slider-label {
+  display: block;
   text-align: center;
+  margin-bottom: 6px;
   font-size: 13px;
   font-family: var(--font-interface);
   color: var(--text-muted);
@@ -199,8 +198,8 @@ body.rr-immersive .status-bar {
    system status bar (top) and navigation/gesture bar (bottom) so text isn't
    clipped. env() with a fallback for devices that don't report safe areas. */
 .rr-mobile.rr-chrome-hidden .rr-content {
-  top: max(env(safe-area-inset-top), 32px);
-  bottom: max(env(safe-area-inset-bottom), 20px);
+  top: max(env(safe-area-inset-top), 48px);
+  bottom: max(env(safe-area-inset-bottom), 24px);
 }
 
 /* ---- Mobile layout ---- */
