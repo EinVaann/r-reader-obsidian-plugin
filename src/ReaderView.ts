@@ -1,8 +1,19 @@
 import { FileView, TFile, WorkspaceLeaf, setIcon } from 'obsidian';
 import type RReaderPlugin from '../main';
 import { EpubReader } from './readers/EpubReader';
-import { PdfReader } from './readers/PdfReader';
 import { MobileControls } from './mobile/MobileControls';
+
+/** Curated reading fonts offered in the quick-settings popover. */
+const FONT_OPTIONS: { label: string; value: string }[] = [
+  { label: 'Georgia', value: 'Georgia, serif' },
+  { label: 'Times', value: '"Times New Roman", Times, serif' },
+  { label: 'Palatino', value: 'Palatino, "Palatino Linotype", "Book Antiqua", serif' },
+  { label: 'System Sans', value: 'system-ui, -apple-system, sans-serif' },
+  { label: 'Helvetica', value: '"Helvetica Neue", Arial, sans-serif' },
+  { label: 'Verdana', value: 'Verdana, Geneva, sans-serif' },
+  { label: 'Fira Code', value: '"Fira Code", ui-monospace, "Courier New", monospace' },
+  { label: 'Monospace', value: '"Courier New", ui-monospace, monospace' },
+];
 import type { Reader, ReaderHost } from './types';
 import type { Theme } from './settings/settings';
 
@@ -68,8 +79,6 @@ export class ReaderView extends FileView implements ReaderHost {
 
     if (ext === 'epub') {
       this.reader = new EpubReader(content, file.path, settings, this.plugin.progressManager, this);
-    } else if (ext === 'pdf') {
-      this.reader = new PdfReader(content, file.path, settings, this.plugin.progressManager, this);
     } else {
       content.createEl('p', { text: `Unsupported format: .${ext}` });
       return;
@@ -145,6 +154,58 @@ export class ReaderView extends FileView implements ReaderHost {
       this.plugin.settings.lineHeight = Math.round(next * 10) / 10;
       await this.plugin.saveSettings();
     });
+
+    // Font family row
+    this.buildFontRow(panel);
+
+    // Table of contents row
+    this.buildTocRow(panel);
+  }
+
+  private buildFontRow(panel: HTMLElement): void {
+    const row = panel.createDiv({ cls: 'rr-qs-row' });
+    row.createSpan({ text: 'Font', cls: 'rr-qs-label' });
+    const select = row.createEl('select', { cls: 'rr-qs-select' });
+
+    const current = this.plugin.settings.fontFamily;
+    const options = FONT_OPTIONS.slice();
+    if (!options.some((o) => o.value === current)) {
+      options.unshift({ label: 'Custom', value: current });
+    }
+    for (const opt of options) {
+      const el = select.createEl('option', { text: opt.label, value: opt.value });
+      el.style.fontFamily = opt.value;
+      if (opt.value === current) el.selected = true;
+    }
+    select.onchange = async () => {
+      this.plugin.settings.fontFamily = select.value;
+      await this.plugin.saveSettings();
+    };
+  }
+
+  private buildTocRow(panel: HTMLElement): void {
+    const reader = this.reader;
+    if (!(reader instanceof EpubReader)) return;
+    const toc = reader.getToc();
+    if (toc.length === 0) return;
+
+    const row = panel.createDiv({ cls: 'rr-qs-row' });
+    row.createSpan({ text: 'Chapter', cls: 'rr-qs-label' });
+    const select = row.createEl('select', { cls: 'rr-qs-select' });
+    select.createEl('option', { text: `Contents (${toc.length})`, value: '' });
+
+    toc.forEach((entry, i) => {
+      const prefix = entry.depth > 0 ? `${' '.repeat(entry.depth)}` : '';
+      select.createEl('option', { text: `${prefix}${entry.label}`, value: String(i) });
+    });
+
+    select.onchange = () => {
+      const i = Number(select.value);
+      if (!select.value || Number.isNaN(i)) return;
+      const entry = toc[i];
+      reader.goToChapter(entry.index, entry.id);
+      select.value = ''; // reset to placeholder
+    };
   }
 
   private buildStepperRow(

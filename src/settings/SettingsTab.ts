@@ -28,18 +28,6 @@ export class RReaderSettingsTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Font family')
-      .setDesc('Font used in the reader (CSS font-family value)')
-      .addText((t) =>
-        t
-          .setValue(this.plugin.settings.fontFamily)
-          .onChange(async (v) => {
-            this.plugin.settings.fontFamily = v;
-            await this.plugin.saveSettings();
-          }),
-      );
-
-    new Setting(containerEl)
       .setName('Font size')
       .setDesc('Font size in pixels (12–36)')
       .addSlider((s) =>

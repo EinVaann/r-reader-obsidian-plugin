@@ -1,17 +1,14 @@
 {
   "name": "r-reader",
-  "version": "0.1.4",
-  "description": "Polished reader for EPUB and PDF in Obsidian",
+  "version": "0.2.0",
+  "description": "Polished EPUB reader for Obsidian",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "node esbuild.config.mjs production",
     "deploy": "node esbuild.config.mjs production && cp main.js manifest.json styles.css \"/Users/anhv/Documents/Vault/.obsidian/plugins/r-reader/\""
   },
-  "dependencies": {
-    "epubjs": "^0.3.93",
-    "pdfjs-dist": "^4.4.168"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/node": "^20.0.0",
     "builtin-modules": "^3.3.0",

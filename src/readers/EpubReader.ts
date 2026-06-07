@@ -2,39 +2,43 @@ import type { PluginSettings } from '../settings/settings';
 import type { ProgressManager } from '../reading-progress/ProgressManager';
 import type { Reader, ReaderHost } from '../types';
 
-// Lazily imported at runtime
-type EpubLocations = {
-  generate: (chars: number) => Promise<string[]>;
-  locationFromCfi: (cfi: string) => number;
-  total: number;
-};
-type EpubBook = {
-  ready: Promise<void>;
-  locations: EpubLocations;
-  renderTo: (el: HTMLElement, opts: Record<string, unknown>) => EpubRendition;
-  destroy: () => void;
-};
-type EpubContents = { document: Document };
-type EpubRendition = {
-  display: (target?: string) => Promise<void>;
-  next: () => Promise<void>;
-  prev: () => Promise<void>;
-  manager?: { container?: HTMLElement };
-  hooks: { content: { register: (cb: (contents: EpubContents) => void) => void } };
-  themes: {
-    register: (name: string, styles: Record<string, Record<string, string>>) => void;
-    select: (name: string) => void;
-    fontSize: (size: string) => void;
-    font: (font: string) => void;
-  };
-  on: (event: string, cb: (...args: unknown[]) => void) => void;
-  destroy: () => void;
-};
+// ce-guard must load before anything that registers custom elements.
+import '../ce-guard';
+// We use foliate-js purely as an EPUB parser (makeBook). The actual rendering
+// is our own: all chapters stacked in one scroll container, in Obsidian's DOM
+// (no iframes) for true whole-book continuous scrolling with no CSP issues.
+import { makeBook } from '../vendor/foliate-js/view.js';
+
+interface FoliateSection {
+  load: () => Promise<string>; // returns a blob: URL to the resolved XHTML
+  unload?: () => void;
+  linear?: string;
+  size?: number;
+}
+interface FoliateTocItem {
+  label?: string;
+  href?: string;
+  subitems?: FoliateTocItem[] | null;
+}
+interface FoliateBook {
+  sections: FoliateSection[];
+  toc?: FoliateTocItem[] | null;
+  metadata?: { title?: string };
+  resolveHref?: (href: string) => { index: number; anchor?: unknown } | null;
+}
+
+/** Flattened table-of-contents entry for the chapter picker. */
+export interface TocEntry {
+  label: string;
+  index: number; // spine/section index
+  id?: string; // optional in-chapter anchor id
+  depth: number;
+}
 
 const THEME_COLORS: Record<string, { bg: string; fg: string }> = {
   light: { bg: '#ffffff', fg: '#1a1a1a' },
   dark: { bg: '#1e1e2e', fg: '#cdd6f4' },
-  sepia: { bg: '#f4ecd8', fg: '#3b2a1a' },
+  sepia: { bg: '#f4ecd8', fg: '#5b4636' },
 };
 
 export class EpubReader implements Reader {
@@ -43,10 +47,14 @@ export class EpubReader implements Reader {
   private settings: PluginSettings;
   private progress: ProgressManager;
   private host: ReaderHost;
-  private book: EpubBook | null = null;
-  private rendition: EpubRendition | null = null;
+
+  private book: FoliateBook | null = null;
+  private sections: FoliateSection[] = [];
   private scrollEl: HTMLElement | null = null;
-  private locationsReady = false;
+  private contentEl: HTMLElement | null = null;
+  private styleEl: HTMLStyleElement | null = null;
+  private scrollHandler: (() => void) | null = null;
+  private destroyed = false;
 
   constructor(
     container: HTMLElement,
@@ -62,147 +70,199 @@ export class EpubReader implements Reader {
     this.host = host;
   }
 
-  private get isContinuous(): boolean {
-    return this.settings.scrollMode === 'continuous';
-  }
-
   async mount(fileArrayBuffer: ArrayBuffer): Promise<void> {
     this.host.setLoading(true);
-    const { default: Epub } = await import('epubjs');
-
     this.container.addClass('rr-epub-container');
 
-    const book = Epub(fileArrayBuffer) as EpubBook;
+    // foliate's makeBook reads file.name to detect format, so pass a File.
+    const name = this.filePath.split('/').pop() || 'book.epub';
+    const file = new File([fileArrayBuffer], name, { type: 'application/epub+zip' });
+    const book = (await makeBook(file)) as FoliateBook;
+    if (this.destroyed) return;
     this.book = book;
+    // Render every spine section so chapter data-index aligns with the indices
+    // returned by book.resolveHref (used by the TOC picker).
+    this.sections = book.sections;
 
-    await book.ready;
+    // Scaffold: a single scroll container holding all chapters.
+    const scroll = this.container.createDiv({ cls: 'rr-epub-scroll' });
+    this.scrollEl = scroll;
+    this.styleEl = document.createElement('style');
+    scroll.appendChild(this.styleEl);
+    this.contentEl = scroll.createDiv({ cls: 'rr-epub-content' });
+    this.applyTheme();
 
-    // "scrolled-continuous" gives true whole-book scrolling (sections load as
-    // you scroll). Its continuous view manager can throw a removeChild
-    // NotFoundError while trimming off-screen views during fast scrolling; we
-    // guard against that below by hardening the container's removeChild.
-    const rendition = book.renderTo(this.container, {
-      width: '100%',
-      height: '100%',
-      flow: this.isContinuous ? 'scrolled-continuous' : 'paginated',
-      manager: this.isContinuous ? 'continuous' : 'default',
-      spread: 'none',
-      allowScriptedContent: false,
-    });
-    this.rendition = rendition;
+    // Render every chapter into the DOM (lazy images keep memory in check).
+    for (let i = 0; i < this.sections.length; i++) {
+      if (this.destroyed) return;
+      await this.renderSection(i);
+      // Surface load progress in the page indicator while building.
+      this.host.setProgress(i + 1, this.sections.length);
+    }
+    if (this.destroyed) return;
 
-    // Strip the book's bundled <link> stylesheets (loaded as blob: URLs that
-    // Obsidian's CSP blocks anyway) and any <script> tags (the iframe is
-    // sandboxed without scripts). This removes the console spam and a source
-    // of layout churn; our injected theme handles styling.
-    rendition.hooks.content.register((contents: EpubContents) => {
-      const doc = contents.document;
-      doc.querySelectorAll('link[rel="stylesheet"], link[href^="blob:"], script').forEach((el) => el.remove());
-    });
-
-    this.applyTheme(rendition);
-
-    const savedCfi = this.progress.get(this.filePath);
-    await rendition.display(typeof savedCfi === 'string' ? savedCfi : undefined);
-
-    // Grab the manager's scroll container and harden it against the
-    // continuous-manager removeChild crash.
-    this.scrollEl = rendition.manager?.container ?? null;
-    this.hardenRemoveChild(this.scrollEl);
-
+    this.setupScrollTracking();
     this.host.setLoading(false);
 
-    rendition.on('relocated', (location: { start: { cfi: string } }) => {
-      const cfi = location.start.cfi;
-      this.progress.save(this.filePath, cfi);
-      this.reportProgress(cfi);
-    });
-
-    // Generate locations in the background to enable global page numbers.
-    book.locations
-      .generate(1024)
-      .then(() => {
-        this.locationsReady = true;
-      })
-      .catch(() => {
-        /* locations are best-effort */
-      });
+    // Restore saved position (stored as a 0..1 fraction of total scroll).
+    const saved = this.progress.get(this.filePath);
+    if (typeof saved === 'number' && saved > 0) {
+      const max = scroll.scrollHeight - scroll.clientHeight;
+      scroll.scrollTop = saved * max;
+    }
+    this.reportProgress();
   }
 
-  /**
-   * epub.js's continuous manager calls container.removeChild(view) while
-   * trimming views, and under fast scrolling the node has sometimes already
-   * been detached, throwing NotFoundError and killing the render queue
-   * (blank/white pages). Wrap removeChild to no-op safely in that case.
-   */
-  private hardenRemoveChild(el: HTMLElement | null): void {
-    if (!el) return;
-    const original = el.removeChild.bind(el);
-    el.removeChild = function <T extends Node>(child: T): T {
-      if (child && child.parentNode === el) {
-        return original(child) as T;
-      }
-      return child; // already removed / not a child — ignore safely
-    };
-  }
+  private async renderSection(index: number): Promise<void> {
+    const section = this.sections[index];
+    const chapter = this.contentEl!.createDiv({ cls: 'rr-chapter' });
+    chapter.dataset.index = String(index);
+    try {
+      const url = await section.load();
+      const html = await (await fetch(url)).text();
+      const doc = new DOMParser().parseFromString(html, 'text/html');
 
-  private reportProgress(cfi: string): void {
-    if (!this.book) return;
-    if (this.locationsReady && this.book.locations.total > 0) {
-      const current = this.book.locations.locationFromCfi(cfi) + 1;
-      this.host.setProgress(current, this.book.locations.total);
-    } else {
-      this.host.setProgress(0, 0);
+      // Strip scripts and the book's own stylesheets (we theme it ourselves;
+      // blob: stylesheets would be blocked by Obsidian's CSP anyway).
+      doc.body.querySelectorAll('script, link, style').forEach((el) => el.remove());
+      // Defer offscreen images so a long book doesn't decode everything at once.
+      doc.body.querySelectorAll('img').forEach((img) => img.setAttribute('loading', 'lazy'));
+
+      const imported = document.importNode(doc.body, true);
+      chapter.append(...Array.from(imported.childNodes));
+    } catch (e) {
+      console.error(`R Reader: failed to render section ${index}`, e);
     }
   }
 
-  private applyTheme(rendition: EpubRendition): void {
+  private applyTheme(): void {
+    if (!this.scrollEl || !this.styleEl) return;
     const { theme, fontFamily, fontSize, lineHeight } = this.settings;
-    const colors = THEME_COLORS[theme] ?? THEME_COLORS.light;
+    const c = THEME_COLORS[theme] ?? THEME_COLORS.light;
 
-    rendition.themes.register('rr', {
-      body: {
-        background: colors.bg,
-        color: colors.fg,
-        'font-family': fontFamily,
-        'line-height': String(lineHeight),
-        padding: '0 1em',
-      },
-      'p, li, div, span': { 'line-height': String(lineHeight) },
-      a: { color: colors.fg },
-    });
-    rendition.themes.select('rr');
-    rendition.themes.fontSize(`${fontSize}px`);
-    rendition.themes.font(fontFamily);
+    this.scrollEl.style.background = c.bg;
+    this.styleEl.textContent = `
+      .rr-epub-content {
+        color: ${c.fg};
+        background: ${c.bg};
+        font-family: ${fontFamily};
+        font-size: ${fontSize}px;
+        line-height: ${lineHeight};
+        max-width: 42em;
+        margin: 0 auto;
+        padding: 1.5em 1.5em 6em;
+      }
+      .rr-epub-content :where(p, div, span, li, a, h1, h2, h3, h4, h5, h6,
+        td, th, blockquote, em, strong, b, i, figcaption) {
+        color: inherit !important;
+        line-height: ${lineHeight};
+      }
+      .rr-epub-content img, .rr-epub-content svg {
+        max-width: 100% !important;
+        height: auto !important;
+      }
+      .rr-epub-content a { text-decoration: underline; }
+      .rr-chapter { margin-bottom: 2em; }
+    `;
+  }
 
-    this.container.style.background = colors.bg;
+  private setupScrollTracking(): void {
+    const el = this.scrollEl!;
+    let ticking = false;
+    this.scrollHandler = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        ticking = false;
+        this.reportProgress();
+        this.saveProgress();
+      });
+    };
+    el.addEventListener('scroll', this.scrollHandler, { passive: true });
+  }
+
+  private reportProgress(): void {
+    const el = this.scrollEl;
+    if (!el) return;
+    const totalScreens = Math.max(1, Math.ceil(el.scrollHeight / el.clientHeight));
+    const currentScreen = Math.min(totalScreens, Math.floor(el.scrollTop / el.clientHeight) + 1);
+    this.host.setProgress(currentScreen, totalScreens);
+  }
+
+  private saveProgress(): void {
+    const el = this.scrollEl;
+    if (!el) return;
+    const max = el.scrollHeight - el.clientHeight;
+    const fraction = max > 0 ? el.scrollTop / max : 0;
+    this.progress.save(this.filePath, fraction);
   }
 
   navigate(dir: 1 | -1): void {
-    if (!this.rendition) return;
-    if (this.isContinuous && this.scrollEl) {
-      // Continuous scroll: move by a screenful, not a whole section.
-      this.scrollEl.scrollBy({ top: dir * this.scrollEl.clientHeight * 0.9, behavior: 'smooth' });
-      return;
-    }
-    // Paginated: turn the page.
-    this.host.setLoading(true);
-    const move = dir > 0 ? this.rendition.next() : this.rendition.prev();
-    Promise.resolve(move).finally(() => this.host.setLoading(false));
+    if (!this.scrollEl) return;
+    this.scrollEl.scrollBy({ top: dir * this.scrollEl.clientHeight * 0.9, behavior: 'smooth' });
   }
 
   applySettings(settings: PluginSettings): void {
     this.settings = settings;
-    if (this.rendition) {
-      this.applyTheme(this.rendition);
+    this.applyTheme();
+  }
+
+  /** Flattened table of contents for the chapter picker. */
+  getToc(): TocEntry[] {
+    const out: TocEntry[] = [];
+    const book = this.book;
+    if (!book?.toc) return out;
+    const walk = (items: FoliateTocItem[], depth: number): void => {
+      for (const item of items) {
+        const href = item.href ?? '';
+        const hash = href.includes('#') ? href.split('#')[1] : undefined;
+        const resolved = book.resolveHref?.(href);
+        out.push({
+          label: (item.label ?? '').trim() || 'Untitled',
+          index: resolved?.index ?? -1,
+          id: hash,
+          depth,
+        });
+        if (item.subitems) walk(item.subitems, depth + 1);
+      }
+    };
+    walk(book.toc, 0);
+    return out;
+  }
+
+  /** Scroll to a chapter (and optional in-chapter anchor) from the TOC. */
+  goToChapter(index: number, id?: string): void {
+    if (index < 0 || !this.contentEl) return;
+    const chapter = this.contentEl.querySelector<HTMLElement>(`.rr-chapter[data-index="${index}"]`);
+    if (!chapter) return;
+    let target: Element = chapter;
+    if (id) {
+      const found =
+        chapter.querySelector(`#${CSS.escape(id)}`) ??
+        chapter.querySelector(`[name="${CSS.escape(id)}"]`);
+      if (found) target = found;
     }
+    target.scrollIntoView({ block: 'start' });
   }
 
   destroy(): void {
-    this.rendition?.destroy();
-    this.book?.destroy();
-    this.rendition = null;
-    this.book = null;
+    this.destroyed = true;
+    if (this.scrollEl && this.scrollHandler) {
+      this.scrollEl.removeEventListener('scroll', this.scrollHandler);
+    }
+    // Revoke chapter blob URLs to free memory.
+    for (const section of this.sections) {
+      try {
+        section.unload?.();
+      } catch {
+        /* ignore */
+      }
+    }
+    this.scrollHandler = null;
     this.scrollEl = null;
+    this.contentEl = null;
+    this.styleEl = null;
+    this.sections = [];
+    this.book = null;
   }
 }

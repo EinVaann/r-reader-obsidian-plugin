@@ -4,6 +4,26 @@ import builtins from "builtin-modules";
 
 const prod = process.argv[2] === "production";
 
+// foliate-js's own PDF support (pdf.js) uses top-level await, which can't be
+// bundled into a CommonJS file. We never hand foliate a PDF (we render PDFs
+// with our own pdfjs-based reader), so stub that module out.
+const stubFoliatePdf = {
+  name: "stub-foliate-pdf",
+  setup(build) {
+    build.onResolve({ filter: /\/pdf\.js$/ }, (args) => {
+      if (args.importer.includes("foliate-js")) {
+        return { path: args.path, namespace: "foliate-pdf-stub" };
+      }
+      return undefined;
+    });
+    build.onLoad({ filter: /.*/, namespace: "foliate-pdf-stub" }, () => ({
+      contents:
+        "export const makePDF = () => { throw new Error('PDF handled by r-reader, not foliate'); };",
+      loader: "js",
+    }));
+  },
+};
+
 const context = await esbuild.context({
   entryPoints: ["main.ts"],
   bundle: true,
@@ -23,8 +43,10 @@ const context = await esbuild.context({
     "@lezer/lr",
     ...builtins,
   ],
+  plugins: [stubFoliatePdf],
   format: "cjs",
-  target: "es2020",
+  platform: "browser",
+  target: "es2022",
   logLevel: "info",
   sourcemap: prod ? false : "inline",
   treeShaking: true,
