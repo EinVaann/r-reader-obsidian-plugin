@@ -69,8 +69,10 @@ export class ReaderView extends FileView implements ReaderHost {
 
     const { settings } = this.plugin;
 
-    // Full-bleed: drop Obsidian's default view padding.
+    // Full-bleed: drop Obsidian's default view padding and anchor the
+    // absolutely-positioned reader root to the view content box.
     this.contentEl.style.padding = '0';
+    this.contentEl.style.position = 'relative';
 
     const root = this.contentEl.createDiv({ cls: 'rr-reader-root' });
     if (Platform.isMobile) root.addClass('rr-mobile');

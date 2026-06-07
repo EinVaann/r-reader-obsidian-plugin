@@ -1,8 +1,14 @@
+/* Remove the view's default padding so the reader is full-bleed (desktop too). */
+.workspace-leaf-content[data-type='r-reader-view'] .view-content {
+  padding: 0;
+}
+
 /* ---- R Reader: root shell ---- */
 .rr-reader-root {
-  position: relative;
-  width: 100%;
-  height: 100%;
+  /* Absolute fill is more reliable than height:100% in the mobile WebView,
+     where the height chain can collapse and push the bars off-screen. */
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;

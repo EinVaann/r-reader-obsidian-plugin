@@ -1,30 +1,28 @@
 import type RReaderPlugin from '../../main';
 
-interface ProgressData {
-  progress: Record<string, string | number>;
-}
-
 export class ProgressManager {
   private plugin: RReaderPlugin;
-  private data: ProgressData = { progress: {} };
+  private progress: Record<string, string | number> = {};
 
   constructor(plugin: RReaderPlugin) {
     this.plugin = plugin;
   }
 
-  async load(): Promise<void> {
-    const saved = await this.plugin.loadData() as ProgressData | null;
-    if (saved?.progress) {
-      this.data = saved;
-    }
+  /** Seed from the data loaded at plugin startup. */
+  load(progress?: Record<string, string | number>): void {
+    if (progress) this.progress = progress;
   }
 
   async save(filePath: string, position: string | number): Promise<void> {
-    this.data.progress[filePath] = position;
-    await this.plugin.saveData(this.data);
+    this.progress[filePath] = position;
+    await this.plugin.persist();
   }
 
   get(filePath: string): string | number | null {
-    return this.data.progress[filePath] ?? null;
+    return this.progress[filePath] ?? null;
+  }
+
+  getAll(): Record<string, string | number> {
+    return this.progress;
   }
 }

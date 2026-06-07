@@ -13,7 +13,7 @@ export interface PluginSettings {
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
-  theme: 'light',
+  theme: 'dark',
   fontFamily: 'Georgia, serif',
   fontSize: 18,
   lineHeight: 1.6,
