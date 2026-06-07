@@ -100,7 +100,15 @@ export class ReaderView extends FileView implements ReaderHost {
       return;
     }
 
-    await this.reader.mount(arrayBuffer);
+    try {
+      await this.reader.mount(arrayBuffer);
+    } catch (e) {
+      this.setLoading(false);
+      const msg = e instanceof Error ? `${e.message}\n${e.stack ?? ''}` : String(e);
+      content.createDiv({ cls: 'rr-error', text: `Failed to open EPUB:\n${msg}` });
+      console.error('R Reader: mount failed', e);
+      return;
+    }
 
     if (Platform.isMobile && settings.touchToScroll) {
       this.mobile = new MobileControls(
@@ -169,6 +177,11 @@ export class ReaderView extends FileView implements ReaderHost {
   private setChromeHidden(hidden: boolean): void {
     this.chromeHidden = hidden;
     this.rootEl?.toggleClass('rr-chrome-hidden', hidden);
+    // Hiding the bars should also dismiss the open settings popover.
+    if (hidden && this.settingsPanel) {
+      this.settingsPanel.remove();
+      this.settingsPanel = null;
+    }
   }
 
   private toggleSettingsPanel(root: HTMLElement): void {

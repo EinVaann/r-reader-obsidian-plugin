@@ -111,6 +111,19 @@
   to { transform: rotate(360deg); }
 }
 
+/* ---- Error display ---- */
+.rr-error {
+  margin: 1.5em;
+  padding: 1em;
+  border-radius: 8px;
+  background: var(--background-secondary);
+  color: var(--text-error);
+  font-family: var(--font-monospace);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* ---- Bottom progress bar + slider ---- */
 .rr-bottombar {
   flex: 0 0 auto;

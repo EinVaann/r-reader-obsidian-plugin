@@ -10,8 +10,10 @@ import '../ce-guard';
 import { makeBook } from '../vendor/foliate-js/view.js';
 
 interface FoliateSection {
-  load: () => Promise<string>; // returns a blob: URL to the resolved XHTML
+  load: () => Promise<string>; // blob: URL to resolved XHTML (avoided on mobile)
   unload?: () => void;
+  createDocument: () => Promise<Document>;
+  resolveHref?: (href: string) => string;
   linear?: string;
   size?: number;
 }
@@ -25,6 +27,7 @@ interface FoliateBook {
   toc?: FoliateTocItem[] | null;
   metadata?: { title?: string };
   resolveHref?: (href: string) => { index: number; anchor?: unknown } | null;
+  loadBlob?: (href: string) => Promise<Blob> | Blob;
 }
 
 /** Flattened table-of-contents entry for the chapter picker. */
@@ -54,6 +57,7 @@ export class EpubReader implements Reader {
   private contentEl: HTMLElement | null = null;
   private styleEl: HTMLStyleElement | null = null;
   private scrollHandler: (() => void) | null = null;
+  private objectUrls: string[] = [];
   private destroyed = false;
 
   constructor(
@@ -118,21 +122,57 @@ export class EpubReader implements Reader {
     const chapter = this.contentEl!.createDiv({ cls: 'rr-chapter' });
     chapter.dataset.index = String(index);
     try {
-      const url = await section.load();
-      const html = await (await fetch(url)).text();
-      const doc = new DOMParser().parseFromString(html, 'text/html');
+      // createDocument() reads + parses the chapter directly (no blob-URL
+      // fetch round-trip, which is unreliable in Obsidian's mobile WebView).
+      const doc = await section.createDocument();
+      const body = doc.body ?? doc.documentElement;
 
-      // Strip scripts and the book's own stylesheets (we theme it ourselves;
-      // blob: stylesheets would be blocked by Obsidian's CSP anyway).
-      doc.body.querySelectorAll('script, link, style').forEach((el) => el.remove());
-      // Defer offscreen images so a long book doesn't decode everything at once.
-      doc.body.querySelectorAll('img').forEach((img) => img.setAttribute('loading', 'lazy'));
+      // Strip scripts and the book's own stylesheets (we theme it ourselves).
+      body.querySelectorAll('script, link, style').forEach((el) => el.remove());
 
-      const imported = document.importNode(doc.body, true);
+      await this.resolveImages(doc, section);
+
+      const imported = document.importNode(body, true);
       chapter.append(...Array.from(imported.childNodes));
     } catch (e) {
       console.error(`R Reader: failed to render section ${index}`, e);
     }
+  }
+
+  /** Replace image references with object URLs loaded via the book's loader. */
+  private async resolveImages(doc: Document, section: FoliateSection): Promise<void> {
+    const book = this.book;
+    if (!book?.loadBlob) return;
+    const resolve = (href: string): string => (section.resolveHref ? section.resolveHref(href) : href);
+    const XLINK = 'http://www.w3.org/1999/xlink';
+
+    const toBlobUrl = async (href: string): Promise<string | null> => {
+      if (!href || href.startsWith('data:')) return null;
+      try {
+        const blob = await book.loadBlob!(resolve(href));
+        if (!blob) return null;
+        const url = URL.createObjectURL(blob);
+        this.objectUrls.push(url);
+        return url;
+      } catch {
+        return null;
+      }
+    };
+
+    const tasks: Promise<void>[] = [];
+    doc.querySelectorAll('img').forEach((img) => {
+      img.setAttribute('loading', 'lazy');
+      const src = img.getAttribute('src');
+      if (src) tasks.push(toBlobUrl(src).then((u) => { if (u) img.setAttribute('src', u); }));
+    });
+    // SVG <image> (common for cover pages)
+    doc.querySelectorAll('image').forEach((im) => {
+      const href = im.getAttribute('href') ?? im.getAttributeNS(XLINK, 'href');
+      if (href) tasks.push(toBlobUrl(href).then((u) => {
+        if (u) { im.setAttribute('href', u); im.setAttributeNS(XLINK, 'href', u); }
+      }));
+    });
+    await Promise.all(tasks);
   }
 
   private applyTheme(): void {
@@ -259,7 +299,15 @@ export class EpubReader implements Reader {
     if (this.scrollEl && this.scrollHandler) {
       this.scrollEl.removeEventListener('scroll', this.scrollHandler);
     }
-    // Revoke chapter blob URLs to free memory.
+    // Revoke image object URLs and unload sections to free memory.
+    for (const url of this.objectUrls) {
+      try {
+        URL.revokeObjectURL(url);
+      } catch {
+        /* ignore */
+      }
+    }
+    this.objectUrls = [];
     for (const section of this.sections) {
       try {
         section.unload?.();
