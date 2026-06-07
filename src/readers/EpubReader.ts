@@ -181,6 +181,9 @@ export class EpubReader implements Reader {
     const c = THEME_COLORS[theme] ?? THEME_COLORS.light;
 
     this.scrollEl.style.background = c.bg;
+    // Tint the reader root too, so safe-area insets blend with the page.
+    const root = this.container.closest('.rr-reader-root');
+    if (root instanceof HTMLElement) root.style.background = c.bg;
     this.styleEl.textContent = `
       .rr-epub-content {
         color: ${c.fg};

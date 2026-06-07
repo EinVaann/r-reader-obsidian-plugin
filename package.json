@@ -1,6 +1,6 @@
 {
   "name": "r-reader",
-  "version": "0.2.11",
+  "version": "0.2.12",
   "description": "Polished EPUB reader for Obsidian",
   "main": "main.js",
   "scripts": {
