@@ -137,6 +137,9 @@ export class ReaderView extends FileView implements ReaderHost {
   private buildTopBar(root: HTMLElement): void {
     const bar = root.createDiv({ cls: 'rr-topbar' });
 
+    // Left: version badge (also confirms which build is loaded) + title.
+    bar.createDiv({ cls: 'rr-topbar-title', text: `v${this.plugin.manifest.version}` });
+
     const prev = bar.createEl('button', { cls: 'rr-iconbtn', attr: { 'aria-label': 'Previous' } });
     setIcon(prev, 'chevron-left');
     prev.onclick = () => this.reader?.navigate(-1);
@@ -155,12 +158,14 @@ export class ReaderView extends FileView implements ReaderHost {
   private buildBottomBar(root: HTMLElement): void {
     const bar = root.createDiv({ cls: 'rr-bottombar' });
 
+    // Centered page count above a full-width progress slider.
+    this.sliderLabel = bar.createDiv({ cls: 'rr-slider-label', text: '…' });
+
     const slider = bar.createEl('input', {
       cls: 'rr-slider',
       attr: { type: 'range', min: '0', max: '1000', value: '0', 'aria-label': 'Reading progress' },
     }) as HTMLInputElement;
     this.slider = slider;
-    this.sliderLabel = bar.createDiv({ cls: 'rr-slider-label', text: '…' });
 
     slider.addEventListener('input', () => {
       this.sliderActive = true;
