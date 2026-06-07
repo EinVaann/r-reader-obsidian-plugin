@@ -145,32 +145,45 @@
   border-top: 1px solid var(--background-modifier-border);
   background: var(--background-secondary);
 }
+/* Custom slider (divs, not a native range input). */
 .rr-slider {
+  position: relative;
   display: block;
   width: 100%;
-  box-sizing: border-box;
-  -webkit-appearance: none;
-  appearance: none;
+  height: 24px;
+  cursor: pointer;
+  touch-action: none;
+}
+.rr-slider-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
   height: 4px;
+  margin-top: -2px;
   border-radius: 2px;
   background: var(--background-modifier-border);
-  cursor: pointer;
-  margin: 0;
 }
-.rr-slider::-webkit-slider-runnable-track {
-  width: 100%;
+.rr-slider-fill {
+  position: absolute;
+  left: 0;
+  width: 0%;
+  top: 50%;
   height: 4px;
+  margin-top: -2px;
   border-radius: 2px;
-  background: transparent;
+  background: var(--interactive-accent);
 }
-.rr-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
+.rr-slider-thumb {
+  position: absolute;
+  left: 0%;
+  top: 50%;
   width: 16px;
   height: 16px;
+  margin-left: -8px;
+  margin-top: -8px;
   border-radius: 50%;
   background: var(--interactive-accent);
-  cursor: pointer;
 }
 .rr-slider-label {
   display: block;
@@ -197,8 +210,8 @@ body.rr-immersive .status-bar {
 /* In immersive mode our bars are gone, so inset the content past the device's
    system status bar (top) and navigation/gesture bar (bottom) so text isn't
    clipped. env() with a fallback for devices that don't report safe areas. */
+/* No top padding in immersive either; keep a small bottom inset for the nav bar. */
 .rr-mobile.rr-chrome-hidden .rr-content {
-  top: max(env(safe-area-inset-top), 48px);
   bottom: max(env(safe-area-inset-bottom), 24px);
 }
 
@@ -232,17 +245,19 @@ body.rr-immersive .status-bar {
 .rr-mobile .rr-topbar .rr-iconbtn:not(.rr-gear) {
   display: none;
 }
-/* Pad the text so it clears the floating bars. */
+/* No top padding (per request); keep bottom room so text clears the bottom bar. */
 .rr-mobile .rr-epub-content {
-  padding: 3.5em 0.9em 5em;
+  padding: 0 0.9em 5em;
 }
 /* Bigger touch target for the slider thumb on mobile. */
 .rr-mobile .rr-slider {
-  height: 6px;
+  height: 30px;
 }
-.rr-mobile .rr-slider::-webkit-slider-thumb {
+.rr-mobile .rr-slider-thumb {
   width: 22px;
   height: 22px;
+  margin-left: -11px;
+  margin-top: -11px;
 }
 
 /* ---- Quick settings popover ---- */

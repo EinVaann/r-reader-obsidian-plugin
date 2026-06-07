@@ -29,7 +29,9 @@ export class ReaderView extends FileView implements ReaderHost {
   private pageIndicator: HTMLElement | null = null;
   private settingsPanel: HTMLElement | null = null;
   private loadingEl: HTMLElement | null = null;
-  private slider: HTMLInputElement | null = null;
+  private sliderEl: HTMLElement | null = null;
+  private sliderFill: HTMLElement | null = null;
+  private sliderThumb: HTMLElement | null = null;
   private sliderLabel: HTMLElement | null = null;
   private sliderActive = false;
   private chromeHidden = false;
@@ -53,9 +55,13 @@ export class ReaderView extends FileView implements ReaderHost {
     this.pageIndicator?.setText(text);
     this.sliderLabel?.setText(text);
     // Don't fight the user while they're dragging the slider.
-    if (this.slider && !this.sliderActive) {
-      this.slider.value = String(Math.round(fraction * 1000));
-    }
+    if (!this.sliderActive) this.updateSliderVisual(fraction);
+  }
+
+  private updateSliderVisual(fraction: number): void {
+    const pct = `${Math.max(0, Math.min(1, fraction)) * 100}%`;
+    if (this.sliderFill) this.sliderFill.style.width = pct;
+    if (this.sliderThumb) this.sliderThumb.style.left = pct;
   }
 
   setLoading(loading: boolean): void {
@@ -173,23 +179,41 @@ export class ReaderView extends FileView implements ReaderHost {
   private buildBottomBar(root: HTMLElement): void {
     const bar = root.createDiv({ cls: 'rr-bottombar' });
 
-    // Centered page count above a full-width progress slider.
+    // Centered page count above a custom full-width progress slider.
     this.sliderLabel = bar.createDiv({ cls: 'rr-slider-label', text: '…' });
 
-    const slider = bar.createEl('input', {
-      cls: 'rr-slider',
-      attr: { type: 'range', min: '0', max: '1000', value: '0', 'aria-label': 'Reading progress' },
-    }) as HTMLInputElement;
-    this.slider = slider;
+    // Custom slider built from divs (no native <input type=range>, which won't
+    // reliably stretch full width in the mobile WebView). A div track with
+    // left:0/right:0 is always full width.
+    const slider = bar.createDiv({ cls: 'rr-slider', attr: { 'aria-label': 'Reading progress' } });
+    this.sliderEl = slider;
+    slider.createDiv({ cls: 'rr-slider-track' });
+    this.sliderFill = slider.createDiv({ cls: 'rr-slider-fill' });
+    this.sliderThumb = slider.createDiv({ cls: 'rr-slider-thumb' });
 
-    slider.addEventListener('input', () => {
+    const seekFromX = (clientX: number): void => {
+      const rect = slider.getBoundingClientRect();
+      const frac = rect.width > 0 ? Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)) : 0;
+      this.updateSliderVisual(frac);
+      this.reader?.seek(frac);
+    };
+
+    slider.addEventListener('pointerdown', (e: PointerEvent) => {
       this.sliderActive = true;
-      this.reader?.seek(Number(slider.value) / 1000);
+      slider.setPointerCapture(e.pointerId);
+      seekFromX(e.clientX);
+      e.preventDefault();
     });
-    const release = () => { this.sliderActive = false; };
-    slider.addEventListener('change', release);
-    slider.addEventListener('pointerup', release);
-    slider.addEventListener('touchend', release);
+    slider.addEventListener('pointermove', (e: PointerEvent) => {
+      if (this.sliderActive) seekFromX(e.clientX);
+    });
+    const end = (e: PointerEvent): void => {
+      if (!this.sliderActive) return;
+      this.sliderActive = false;
+      try { slider.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+    };
+    slider.addEventListener('pointerup', end);
+    slider.addEventListener('pointercancel', end);
   }
 
   private toggleChrome(): void {
@@ -342,7 +366,9 @@ export class ReaderView extends FileView implements ReaderHost {
     this.pageIndicator = null;
     this.settingsPanel = null;
     this.loadingEl = null;
-    this.slider = null;
+    this.sliderEl = null;
+    this.sliderFill = null;
+    this.sliderThumb = null;
     this.sliderLabel = null;
     this.sliderActive = false;
     this.chromeHidden = false;
