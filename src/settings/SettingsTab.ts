@@ -96,6 +96,18 @@ export class RReaderSettingsTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName('No image mode')
+      .setDesc('Render a text placeholder instead of images (faster, less memory). Reopen the book to apply.')
+      .addToggle((t) =>
+        t
+          .setValue(this.plugin.settings.noImageMode)
+          .onChange(async (v) => {
+            this.plugin.settings.noImageMode = v;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
       .setName('Hide bars on mobile')
       .setDesc('Start in full-screen reading mode; tap the center of the screen to show the bars')
       .addToggle((t) =>

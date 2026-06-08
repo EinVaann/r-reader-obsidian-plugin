@@ -130,13 +130,29 @@ export class EpubReader implements Reader {
       // Strip scripts and the book's own stylesheets (we theme it ourselves).
       body.querySelectorAll('script, link, style').forEach((el) => el.remove());
 
-      await this.resolveImages(doc, section);
+      if (this.settings.noImageMode) {
+        this.replaceImagesWithPlaceholders(doc);
+      } else {
+        await this.resolveImages(doc, section);
+      }
 
       const imported = document.importNode(body, true);
       chapter.append(...Array.from(imported.childNodes));
     } catch (e) {
       console.error(`R Reader: failed to render section ${index}`, e);
     }
+  }
+
+  /** Replace images with a text placeholder (no-image mode). */
+  private replaceImagesWithPlaceholders(doc: Document): void {
+    doc.querySelectorAll('img, picture, svg').forEach((el) => {
+      if (!el.isConnected) return;
+      const alt = el.getAttribute('alt') || el.getAttribute('title') || '';
+      const ph = doc.createElement('div');
+      ph.className = 'rr-img-placeholder';
+      ph.textContent = alt ? `🖼 ${alt}` : '🖼 [Image]';
+      el.replaceWith(ph);
+    });
   }
 
   /** Replace image references with object URLs loaded via the book's loader. */

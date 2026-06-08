@@ -13,6 +13,8 @@ export interface PluginSettings {
   /** Apply Obsidian's "detect all file extensions" on load. This plugin
    *  setting syncs via data.json, so EPUBs show on every device. */
   detectAllExtensions: boolean;
+  /** Render a text placeholder instead of images. */
+  noImageMode: boolean;
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -24,4 +26,5 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   touchToScroll: true,
   hideBarsOnMobile: false,
   detectAllExtensions: true,
+  noImageMode: false,
 };

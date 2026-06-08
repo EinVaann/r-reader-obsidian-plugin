@@ -89,6 +89,16 @@
   word-wrap: break-word;
   overflow-wrap: break-word;
 }
+.rr-img-placeholder {
+  display: inline-block;
+  padding: 0.3em 0.7em;
+  margin: 0.4em 0;
+  border: 1px dashed var(--background-modifier-border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-family: var(--font-interface);
+  font-size: 0.85em;
+}
 
 /* ---- Loading overlay ---- */
 .rr-loading {
