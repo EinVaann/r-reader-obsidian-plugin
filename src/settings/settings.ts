@@ -15,6 +15,8 @@ export interface PluginSettings {
   detectAllExtensions: boolean;
   /** Render a text placeholder instead of images. */
   noImageMode: boolean;
+  /** Close the quick-settings menu after jumping to a TOC chapter. */
+  closeMenuAfterTocJump: boolean;
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -27,4 +29,5 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   hideBarsOnMobile: false,
   detectAllExtensions: true,
   noImageMode: false,
+  closeMenuAfterTocJump: true,
 };

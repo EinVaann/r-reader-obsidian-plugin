@@ -28,16 +28,12 @@
   background: var(--background-secondary);
 }
 
+/* Page counter lives in the bottom slider now; hidden in the top bar. */
 .rr-page-indicator {
-  flex: 1 1 auto;
-  text-align: center;
-  font-size: 13px;
-  font-family: var(--font-interface);
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
+  display: none;
 }
 .rr-topbar-title {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   font-size: 12px;
   font-family: var(--font-interface);
   color: var(--text-muted);

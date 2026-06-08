@@ -96,6 +96,18 @@ export class RReaderSettingsTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName('Close menu after chapter jump')
+      .setDesc('When you pick a chapter from the table of contents, close the quick-settings menu after jumping.')
+      .addToggle((t) =>
+        t
+          .setValue(this.plugin.settings.closeMenuAfterTocJump)
+          .onChange(async (v) => {
+            this.plugin.settings.closeMenuAfterTocJump = v;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
       .setName('No image mode')
       .setDesc('Render a text placeholder instead of images (faster, less memory). Reopen the book to apply.')
       .addToggle((t) =>

@@ -324,7 +324,12 @@ export class ReaderView extends FileView implements ReaderHost {
       if (!select.value || Number.isNaN(i)) return;
       const entry = toc[i];
       reader.goToChapter(entry.index, entry.id);
-      select.value = ''; // reset to placeholder
+      if (this.plugin.settings.closeMenuAfterTocJump) {
+        this.settingsPanel?.remove();
+        this.settingsPanel = null;
+      } else {
+        select.value = ''; // reset to placeholder
+      }
     };
   }
 
