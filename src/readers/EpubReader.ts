@@ -94,6 +94,7 @@ export class EpubReader implements Reader {
     this.styleEl = document.createElement('style');
     scroll.appendChild(this.styleEl);
     this.contentEl = scroll.createDiv({ cls: 'rr-epub-content' });
+    this.contentEl.addEventListener('click', this.handleContentClick);
     this.applyTheme();
 
     // Render every chapter into the DOM (lazy images keep memory in check).
@@ -298,6 +299,51 @@ export class EpubReader implements Reader {
     return out;
   }
 
+  /** Handle clicks on links inside the rendered book. */
+  private handleContentClick = (e: MouseEvent): void => {
+    const anchor = (e.target as HTMLElement).closest('a');
+    if (!anchor) return;
+    const href = anchor.getAttribute('href');
+    if (!href) return;
+
+    // External links open in the browser.
+    if (/^(https?:|mailto:|tel:)/i.test(href)) {
+      e.preventDefault();
+      window.open(href, '_blank');
+      return;
+    }
+    // Ignore pure JS / empty anchors.
+    if (href.startsWith('javascript:') || href === '#') {
+      e.preventDefault();
+      return;
+    }
+
+    // Internal link: resolve to a chapter (+ anchor) and jump there.
+    e.preventDefault();
+    this.navigateToInternalHref(anchor, href);
+  };
+
+  private navigateToInternalHref(anchor: Element, href: string): void {
+    const chapter = anchor.closest('.rr-chapter');
+    if (!(chapter instanceof HTMLElement) || !this.book) return;
+    const fromIndex = Number(chapter.dataset.index);
+    const section = this.sections[fromIndex];
+    const hash = href.includes('#') ? decodeURIComponent(href.split('#')[1]) : undefined;
+
+    try {
+      const resolved = section?.resolveHref ? section.resolveHref(href) : href;
+      const target = this.book.resolveHref?.(resolved);
+      if (target && typeof target.index === 'number' && target.index >= 0) {
+        this.goToChapter(target.index, hash);
+        return;
+      }
+    } catch {
+      /* fall through to same-chapter anchor */
+    }
+    // Fallback: same-document anchor.
+    if (hash) this.goToChapter(fromIndex, hash);
+  }
+
   /** Scroll to a chapter (and optional in-chapter anchor) from the TOC. */
   goToChapter(index: number, id?: string): void {
     if (index < 0 || !this.contentEl) return;
@@ -334,6 +380,7 @@ export class EpubReader implements Reader {
         /* ignore */
       }
     }
+    this.contentEl?.removeEventListener('click', this.handleContentClick);
     this.scrollHandler = null;
     this.scrollEl = null;
     this.contentEl = null;
