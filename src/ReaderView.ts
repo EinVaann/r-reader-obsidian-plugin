@@ -204,17 +204,33 @@ export class ReaderView extends FileView implements ReaderHost {
       slider.setPointerCapture(e.pointerId);
       seekFromX(e.clientX);
       e.preventDefault();
+      e.stopPropagation();
     });
     slider.addEventListener('pointermove', (e: PointerEvent) => {
-      if (this.sliderActive) seekFromX(e.clientX);
+      if (this.sliderActive) {
+        seekFromX(e.clientX);
+        e.stopPropagation();
+      }
     });
     const end = (e: PointerEvent): void => {
       if (!this.sliderActive) return;
       this.sliderActive = false;
+      e.stopPropagation();
       try { slider.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
     };
     slider.addEventListener('pointerup', end);
     slider.addEventListener('pointercancel', end);
+
+    // Prevent the OS / Obsidian swipe-back gesture from firing while the user
+    // scrubs the slider. Touch events are what the native swipe detector sees,
+    // so we block them here at the slider level (passive:false so preventDefault works).
+    slider.addEventListener('touchstart', (e: TouchEvent) => {
+      e.stopPropagation();
+    }, { passive: true });
+    slider.addEventListener('touchmove', (e: TouchEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+    }, { passive: false });
   }
 
   private toggleChrome(): void {
