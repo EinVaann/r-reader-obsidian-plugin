@@ -220,6 +220,22 @@ export class ReaderView extends FileView implements ReaderHost {
     this.setChromeHidden(!this.chromeHidden);
   }
 
+  // --- Public actions for command-palette commands ---
+  /** Toggle distraction-free reading (hide the top/bottom bars). */
+  toggleImmersive(): void {
+    this.toggleChrome();
+  }
+
+  /** Scroll a screen forward (1) or backward (-1). */
+  pageNavigate(dir: 1 | -1): void {
+    this.reader?.navigate(dir);
+  }
+
+  /** Open the in-reader quick-settings popover (theme/font/TOC). */
+  openQuickSettings(): void {
+    if (this.rootEl) this.toggleSettingsPanel(this.rootEl);
+  }
+
   private setChromeHidden(hidden: boolean): void {
     this.chromeHidden = hidden;
     this.rootEl?.toggleClass('rr-chrome-hidden', hidden);

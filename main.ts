@@ -1,7 +1,7 @@
 import { Plugin } from 'obsidian';
 import { READER_VIEW_TYPE, ReaderView } from './src/ReaderView';
 import { RReaderSettingsTab } from './src/settings/SettingsTab';
-import { DEFAULT_SETTINGS, type PluginSettings } from './src/settings/settings';
+import { DEFAULT_SETTINGS, type PluginSettings, type Theme } from './src/settings/settings';
 import { ProgressManager } from './src/reading-progress/ProgressManager';
 
 interface RReaderData {
@@ -48,11 +48,75 @@ export default class RReaderPlugin extends Plugin {
 
     this.addSettingTab(new RReaderSettingsTab(this.app, this));
 
-    this.addRibbonIcon('book-open', 'R Reader', () => {
-      const leaves = this.app.workspace.getLeavesOfType(READER_VIEW_TYPE);
-      if (leaves.length > 0) {
-        this.app.workspace.revealLeaf(leaves[0]);
-      }
+    // Ribbon opens the command palette so the reader commands are one tap away.
+    this.addRibbonIcon('book-open', 'R Reader commands', () => {
+      (this.app as unknown as { commands: { executeCommandById: (id: string) => void } })
+        .commands.executeCommandById('command-palette:open');
+    });
+
+    this.addReaderCommands();
+  }
+
+  private getActiveReader(): ReaderView | null {
+    return this.app.workspace.getActiveViewOfType(ReaderView);
+  }
+
+  /** Run an action against the active reader; gates command availability. */
+  private readerCommand(check: boolean, action: (view: ReaderView) => void): boolean {
+    const view = this.getActiveReader();
+    if (!view) return false;
+    if (!check) action(view);
+    return true;
+  }
+
+  private addReaderCommands(): void {
+    this.addCommand({
+      id: 'toggle-immersive',
+      name: 'Toggle full-screen reading (hide bars)',
+      checkCallback: (checking) => this.readerCommand(checking, (v) => v.toggleImmersive()),
+    });
+    this.addCommand({
+      id: 'scroll-down',
+      name: 'Scroll down (next screen)',
+      checkCallback: (checking) => this.readerCommand(checking, (v) => v.pageNavigate(1)),
+    });
+    this.addCommand({
+      id: 'scroll-up',
+      name: 'Scroll up (previous screen)',
+      checkCallback: (checking) => this.readerCommand(checking, (v) => v.pageNavigate(-1)),
+    });
+    this.addCommand({
+      id: 'open-quick-settings',
+      name: 'Open reader settings menu',
+      checkCallback: (checking) => this.readerCommand(checking, (v) => v.openQuickSettings()),
+    });
+    this.addCommand({
+      id: 'cycle-theme',
+      name: 'Cycle theme (light / dark / sepia)',
+      checkCallback: (checking) =>
+        this.readerCommand(checking, () => {
+          const order: Theme[] = ['light', 'dark', 'sepia'];
+          this.settings.theme = order[(order.indexOf(this.settings.theme) + 1) % order.length];
+          void this.saveSettings();
+        }),
+    });
+    this.addCommand({
+      id: 'increase-font',
+      name: 'Increase font size',
+      checkCallback: (checking) =>
+        this.readerCommand(checking, () => {
+          this.settings.fontSize = Math.min(36, this.settings.fontSize + 1);
+          void this.saveSettings();
+        }),
+    });
+    this.addCommand({
+      id: 'decrease-font',
+      name: 'Decrease font size',
+      checkCallback: (checking) =>
+        this.readerCommand(checking, () => {
+          this.settings.fontSize = Math.max(12, this.settings.fontSize - 1);
+          void this.saveSettings();
+        }),
     });
   }
 
