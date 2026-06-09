@@ -13,6 +13,7 @@ const FONT_OPTIONS: { label: string; value: string }[] = [
   { label: 'System Sans', value: 'system-ui, -apple-system, sans-serif' },
   { label: 'Helvetica', value: '"Helvetica Neue", Arial, sans-serif' },
   { label: 'Verdana', value: 'Verdana, Geneva, sans-serif' },
+  { label: 'Bricolage Grotesque', value: '"Bricolage Grotesque", system-ui, sans-serif' },
   { label: 'Fira Code', value: '"Fira Code", ui-monospace, "Courier New", monospace' },
   { label: 'Monospace', value: '"Courier New", ui-monospace, monospace' },
 ];
