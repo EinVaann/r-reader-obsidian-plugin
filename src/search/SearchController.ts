@@ -55,16 +55,12 @@ export class SearchController {
       window.clearTimeout(this.debounce);
       this.debounce = window.setTimeout(() => this.runSearch(input.value), 200);
     };
-    if (this.opts.isMobile) {
-      const close = header.createEl('button', { cls: 'rr-search-close', attr: { 'aria-label': 'Close' } });
-      setIcon(close, 'x');
-      close.onclick = () => this.close();
-    }
+    const close = header.createEl('button', { cls: 'rr-search-close', attr: { 'aria-label': 'Close' } });
+    setIcon(close, 'x');
+    close.onclick = () => this.close();
 
     this.countEl = panel.createDiv({ cls: 'rr-search-count' });
     this.resultsEl = panel.createDiv({ cls: 'rr-search-results' });
-
-    if (!this.opts.isMobile && anchorEl) this.positionUnder(panel, anchorEl);
 
     this.keyListener = (e: KeyboardEvent) => { if (e.key === 'Escape') this.close(); };
     document.addEventListener('keydown', this.keyListener);
@@ -112,21 +108,6 @@ export class SearchController {
       idx = lower.indexOf(q, from);
     }
     if (from < text.length) el.appendText(text.slice(from));
-  }
-
-  private positionUnder(panel: HTMLElement, anchorEl: HTMLElement): void {
-    const rect = anchorEl.getBoundingClientRect();
-    panel.style.position = 'fixed';
-    panel.style.visibility = 'hidden';
-    requestAnimationFrame(() => {
-      const w = panel.offsetWidth;
-      const vw = window.innerWidth;
-      let left = rect.right - w;
-      left = Math.max(8, Math.min(left, vw - w - 8));
-      panel.style.left = `${left}px`;
-      panel.style.top = `${rect.bottom + 6}px`;
-      panel.style.visibility = 'visible';
-    });
   }
 
   close(): void {

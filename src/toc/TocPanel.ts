@@ -47,25 +47,19 @@ export class TocPanel {
     });
     this.el = panel;
 
-    // Header (mobile gets a title + close button).
+    // Header: search box + close button (sidebar on desktop, overlay on mobile).
     const header = panel.createDiv({ cls: 'rr-toc-header' });
-    if (this.opts.isMobile) {
-      header.createDiv({ cls: 'rr-toc-title', text: 'Contents' });
-      const close = header.createEl('button', { cls: 'rr-toc-close', attr: { 'aria-label': 'Close' } });
-      setIcon(close, 'x');
-      close.onclick = () => this.close();
-    }
-
     const search = header.createEl('input', {
       cls: 'rr-toc-search',
       attr: { type: 'text', placeholder: 'Search chapters…' },
     });
     search.oninput = () => this.renderList(search.value);
+    const close = header.createEl('button', { cls: 'rr-toc-close', attr: { 'aria-label': 'Close' } });
+    setIcon(close, 'x');
+    close.onclick = () => this.close();
 
     this.listEl = panel.createDiv({ cls: 'rr-toc-list' });
     this.renderList('');
-
-    if (!this.opts.isMobile && anchorEl) this.positionUnder(panel, anchorEl);
 
     // Close on Esc; desktop also closes on outside click.
     this.keyListener = (e: KeyboardEvent) => { if (e.key === 'Escape') this.close(); };
@@ -103,21 +97,6 @@ export class TocPanel {
         if (this.opts.closeAfterJump()) this.close();
       };
     }
-  }
-
-  private positionUnder(panel: HTMLElement, anchorEl: HTMLElement): void {
-    const rect = anchorEl.getBoundingClientRect();
-    panel.style.position = 'fixed';
-    panel.style.visibility = 'hidden';
-    requestAnimationFrame(() => {
-      const w = panel.offsetWidth;
-      const vw = window.innerWidth;
-      let left = rect.right - w;
-      left = Math.max(8, Math.min(left, vw - w - 8));
-      panel.style.left = `${left}px`;
-      panel.style.top = `${rect.bottom + 6}px`;
-      panel.style.visibility = 'visible';
-    });
   }
 
   close(): void {

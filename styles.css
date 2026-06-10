@@ -462,18 +462,21 @@ body.rr-immersive .status-bar {
 .rr-bookmark-del:hover { color: var(--text-error); }
 
 /* ===================== TOC panel / overlay ===================== */
+/* Desktop: a full-height sidebar docked to the right of the reader pane
+   (no longer a floating popover that gets shoved off the edge). */
 .rr-toc-panel,
 .rr-search-panel {
-  position: fixed;
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
   z-index: 210;
   display: flex;
   flex-direction: column;
-  width: min(360px, 80vw);
-  max-height: 70vh;
-  border-radius: 10px;
+  width: min(340px, 85%);
   background: var(--background-primary);
-  border: 1px solid var(--background-modifier-border);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.32);
+  border-left: 1px solid var(--background-modifier-border);
+  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.28);
   font-family: var(--font-interface);
   overflow: hidden;
 }
