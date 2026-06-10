@@ -9,6 +9,7 @@ import { makeId } from './annotations/AnnotationManager';
 import type { Highlight, HighlightColor } from './annotations/types';
 import type { QuoteAnchor } from './annotations/anchor';
 import { exportBookNotes } from './export/exportNotes';
+import { promptForText } from './ui/PromptModal';
 import { metaAuthor, metaTitle, type BookMeta } from './util/bookMeta';
 import type { Reader, ReaderHost } from './types';
 import type { Theme } from './settings/settings';
@@ -195,12 +196,12 @@ export class ReaderView extends FileView implements ReaderHost {
     // Left: version badge (also confirms which build is loaded) + title.
     bar.createDiv({ cls: 'rr-topbar-title', text: `v${this.plugin.manifest.version}` });
 
-    const toc = bar.createEl('button', { cls: 'rr-iconbtn', attr: { 'aria-label': 'Table of contents' } });
+    const toc = bar.createEl('button', { cls: 'rr-iconbtn rr-keep-mobile', attr: { 'aria-label': 'Table of contents' } });
     setIcon(toc, 'list');
     toc.onclick = () => this.openTableOfContents();
     this.tocButton = toc;
 
-    const search = bar.createEl('button', { cls: 'rr-iconbtn', attr: { 'aria-label': 'Search in book' } });
+    const search = bar.createEl('button', { cls: 'rr-iconbtn rr-keep-mobile', attr: { 'aria-label': 'Search in book' } });
     setIcon(search, 'search');
     search.onclick = () => this.openSearch();
     this.searchButton = search;
@@ -374,7 +375,7 @@ export class ReaderView extends FileView implements ReaderHost {
     this.searchController.toggle(this.searchButton ?? undefined);
   }
 
-  /** Bookmark the current reading position. */
+  /** Bookmark the current reading position (prompts for a name). */
   async addBookmarkAtCurrent(): Promise<void> {
     const epub = this.epub;
     const file = this.currentFile;
@@ -384,7 +385,15 @@ export class ReaderView extends FileView implements ReaderHost {
     let label = '';
     for (const e of toc) if (e.index >= 0 && e.index <= loc.chapterIndex) label = e.label;
     const count = this.plugin.annotationManager.get(file.path).bookmarks.length;
-    const name = label || `Bookmark ${count + 1}`;
+    const defaultName = label || `Bookmark ${count + 1}`;
+
+    const name = await promptForText(this.app, {
+      title: 'Name this bookmark',
+      defaultValue: defaultName,
+      placeholder: 'Bookmark name',
+    });
+    if (name === null) return; // cancelled
+
     await this.plugin.annotationManager.addBookmark(file.path, {
       id: makeId(),
       chapterIndex: loc.chapterIndex,

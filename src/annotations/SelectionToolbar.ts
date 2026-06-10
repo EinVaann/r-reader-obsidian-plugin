@@ -27,6 +27,8 @@ export class SelectionToolbar {
   private editor: HTMLElement | null = null;
   private selectionListener: (() => void) | null = null;
   private outsideListener: ((e: Event) => void) | null = null;
+  /** Anchor captured the moment the bar is shown (selection is still live). */
+  private pendingAnchor: QuoteAnchor | null = null;
 
   constructor(rootEl: HTMLElement, contentEl: HTMLElement, host: SelectionToolbarHost) {
     this.rootEl = rootEl;
@@ -86,8 +88,20 @@ export class SelectionToolbar {
   // --- Selection toolbar ---
   private showBar(rect: DOMRect): void {
     this.hideEditor();
+    // Capture the anchor NOW, while the selection is live. Clicking a swatch
+    // collapses the selection (mousedown moves the caret), so reading it at
+    // click time would return nothing — this is the whole reason highlights
+    // need the anchor captured up front.
+    this.pendingAnchor = this.host.captureSelection();
+    if (!this.pendingAnchor) return;
+
     if (!this.bar) {
       this.bar = this.rootEl.createDiv({ cls: 'rr-selection-toolbar' });
+      // Preserve the text selection: prevent mousedown/touchstart inside the
+      // toolbar from clearing it before our click handlers run.
+      const preserve = (e: Event) => e.preventDefault();
+      this.bar.addEventListener('mousedown', preserve);
+      this.bar.addEventListener('touchstart', preserve, { passive: false });
       this.buildSwatches(this.bar, (color) => this.createFromSelection(color));
       const note = this.bar.createEl('button', { cls: 'rr-st-note', text: 'Note' });
       note.onclick = () => this.createFromSelection(this.host.defaultColor(), true);
@@ -104,7 +118,8 @@ export class SelectionToolbar {
   }
 
   private createFromSelection(color: HighlightColor, openNote = false): void {
-    const anchor = this.host.captureSelection();
+    // Use the anchor captured when the bar appeared (selection may be gone now).
+    const anchor = this.pendingAnchor ?? this.host.captureSelection();
     this.hideBar();
     if (!anchor) return;
     const created = this.host.onCreate(anchor, color);
@@ -172,6 +187,7 @@ export class SelectionToolbar {
   private hideBar(): void {
     this.bar?.remove();
     this.bar = null;
+    this.pendingAnchor = null;
   }
 
   private hideEditor(): void {
