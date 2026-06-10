@@ -1,8 +1,9 @@
-import { Plugin } from 'obsidian';
+import { Notice, Plugin } from 'obsidian';
 import { READER_VIEW_TYPE, ReaderView } from './src/ReaderView';
 import { RReaderSettingsTab } from './src/settings/SettingsTab';
 import { DEFAULT_SETTINGS, type PluginSettings, type Theme } from './src/settings/settings';
 import { ProgressManager } from './src/reading-progress/ProgressManager';
+import type { EpubCacheEntry } from './src/readers/EpubReader';
 
 interface RReaderData {
   settings?: Partial<PluginSettings>;
@@ -12,6 +13,8 @@ interface RReaderData {
 export default class RReaderPlugin extends Plugin {
   settings!: PluginSettings;
   progressManager!: ProgressManager;
+  /** In-memory cache of rendered EPUB HTML. Cleared on demand or plugin unload. */
+  epubCache = new Map<string, EpubCacheEntry>();
 
   async onload(): Promise<void> {
     // Settings and reading progress share one data.json. Read both from a
@@ -55,6 +58,15 @@ export default class RReaderPlugin extends Plugin {
     });
 
     this.addReaderCommands();
+
+    this.addCommand({
+      id: 'clear-epub-cache',
+      name: 'Clear EPUB render cache',
+      callback: () => {
+        this.clearEpubCache();
+        new Notice('R Reader: EPUB cache cleared');
+      },
+    });
   }
 
   private getActiveReader(): ReaderView | null {
@@ -118,6 +130,16 @@ export default class RReaderPlugin extends Plugin {
           void this.saveSettings();
         }),
     });
+  }
+
+  /** Revoke all cached blob URLs and empty the render cache. */
+  clearEpubCache(): void {
+    for (const entry of this.epubCache.values()) {
+      for (const url of entry.objectUrls) {
+        try { URL.revokeObjectURL(url); } catch { /* ignore */ }
+      }
+    }
+    this.epubCache.clear();
   }
 
   /**

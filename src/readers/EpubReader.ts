@@ -38,6 +38,16 @@ export interface TocEntry {
   depth: number;
 }
 
+/** One entry in the in-memory EPUB render cache (keyed by file path). */
+export interface EpubCacheEntry {
+  /** The rendered innerHTML of the content div. */
+  html: string;
+  /** File modification time at render time — used to detect stale entries. */
+  mtime: number;
+  /** Blob URLs for images; owned by the cache so destroy() doesn't revoke them. */
+  objectUrls: string[];
+}
+
 const THEME_COLORS: Record<string, { bg: string; fg: string }> = {
   light: { bg: '#ffffff', fg: '#1a1a1a' },
   dark: { bg: '#1e1e2e', fg: '#cdd6f4' },
@@ -60,18 +70,25 @@ export class EpubReader implements Reader {
   private objectUrls: string[] = [];
   private destroyed = false;
 
+  private cache: Map<string, EpubCacheEntry> | null;
+  private mtime: number;
+
   constructor(
     container: HTMLElement,
     filePath: string,
     settings: PluginSettings,
     progress: ProgressManager,
     host: ReaderHost,
+    cache: Map<string, EpubCacheEntry> | null = null,
+    mtime = 0,
   ) {
     this.container = container;
     this.filePath = filePath;
     this.settings = settings;
     this.progress = progress;
     this.host = host;
+    this.cache = cache;
+    this.mtime = mtime;
   }
 
   async mount(fileArrayBuffer: ArrayBuffer): Promise<void> {
@@ -97,12 +114,33 @@ export class EpubReader implements Reader {
     this.contentEl.addEventListener('click', this.handleContentClick);
     this.applyTheme();
 
-    // Render every chapter into the DOM (lazy images keep memory in check).
-    for (let i = 0; i < this.sections.length; i++) {
+    // Cache check — skip the slow render loop if we have a fresh entry.
+    const cached = this.cache?.get(this.filePath);
+    if (cached && cached.mtime === this.mtime) {
+      // Cache hit: inject the pre-rendered HTML directly.
+      this.contentEl.innerHTML = cached.html;
+    } else {
+      // Cache miss (or stale): render every section and then store the result.
+      if (cached) this.cache?.delete(this.filePath); // remove stale entry
+
+      for (let i = 0; i < this.sections.length; i++) {
+        if (this.destroyed) return;
+        await this.renderSection(i);
+        // Surface load progress in the page indicator while building.
+        this.host.setProgress(i + 1, this.sections.length, (i + 1) / this.sections.length);
+      }
       if (this.destroyed) return;
-      await this.renderSection(i);
-      // Surface load progress in the page indicator while building.
-      this.host.setProgress(i + 1, this.sections.length);
+
+      // Store result; transfer objectUrl ownership to cache so destroy() won't
+      // revoke them (the blob URLs must stay alive for cached re-opens).
+      if (this.cache) {
+        this.cache.set(this.filePath, {
+          html: this.contentEl.innerHTML,
+          mtime: this.mtime,
+          objectUrls: [...this.objectUrls],
+        });
+        this.objectUrls = []; // cache owns them now
+      }
     }
     if (this.destroyed) return;
 

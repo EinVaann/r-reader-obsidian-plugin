@@ -103,7 +103,7 @@ export class ReaderView extends FileView implements ReaderHost {
     const ext = file.extension.toLowerCase();
 
     if (ext === 'epub') {
-      this.reader = new EpubReader(content, file.path, settings, this.plugin.progressManager, this);
+      this.reader = new EpubReader(content, file.path, settings, this.plugin.progressManager, this, this.plugin.epubCache, file.stat.mtime);
     } else {
       content.createEl('p', { text: `Unsupported format: .${ext}` });
       return;

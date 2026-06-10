@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting } from 'obsidian';
+import { App, Notice, PluginSettingTab, Setting } from 'obsidian';
 import type RReaderPlugin from '../../main';
 import type { Theme, ScrollMode } from './settings';
 
@@ -128,6 +128,18 @@ export class RReaderSettingsTab extends PluginSettingTab {
           .onChange(async (v) => {
             this.plugin.settings.hideBarsOnMobile = v;
             await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Clear EPUB cache')
+      .setDesc('Books are cached in memory after the first load so re-opening them is instant. Clear this if a book looks wrong or after toggling no-image mode.')
+      .addButton((b) =>
+        b
+          .setButtonText('Clear cache')
+          .onClick(() => {
+            this.plugin.clearEpubCache();
+            new Notice('R Reader: EPUB cache cleared');
           }),
       );
   }
