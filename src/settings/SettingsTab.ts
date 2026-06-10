@@ -1,6 +1,7 @@
 import { App, Notice, PluginSettingTab, Setting } from 'obsidian';
 import type RReaderPlugin from '../../main';
 import type { Theme, ScrollMode } from './settings';
+import type { HighlightColor } from '../annotations/types';
 
 export class RReaderSettingsTab extends PluginSettingTab {
   plugin: RReaderPlugin;
@@ -127,6 +128,32 @@ export class RReaderSettingsTab extends PluginSettingTab {
           .setValue(this.plugin.settings.hideBarsOnMobile)
           .onChange(async (v) => {
             this.plugin.settings.hideBarsOnMobile = v;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Default highlight color')
+      .setDesc('Color used when you create a highlight (you can recolor any highlight later).')
+      .addDropdown((d) =>
+        d
+          .addOptions({ yellow: 'Yellow', green: 'Green', blue: 'Blue', pink: 'Pink' })
+          .setValue(this.plugin.settings.defaultHighlightColor)
+          .onChange(async (v) => {
+            this.plugin.settings.defaultHighlightColor = v as HighlightColor;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Notes export folder')
+      .setDesc('Vault folder where "Export reading notes" writes a Markdown file per book.')
+      .addText((t) =>
+        t
+          .setPlaceholder('R Reader Notes')
+          .setValue(this.plugin.settings.notesExportFolder)
+          .onChange(async (v) => {
+            this.plugin.settings.notesExportFolder = v;
             await this.plugin.saveSettings();
           }),
       );

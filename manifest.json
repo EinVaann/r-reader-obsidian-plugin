@@ -1,9 +1,9 @@
 {
   "id": "r-reader",
   "name": "R Reader",
-  "version": "0.2.20",
+  "version": "0.3.0",
   "minAppVersion": "1.4.0",
-  "description": "A polished, mobile-friendly EPUB reader with custom fonts, themes, and reading progress.",
+  "description": "A polished, mobile-friendly EPUB reader with highlights, notes, library, search, bookmarks, custom fonts, and themes.",
   "author": "EinVaann",
   "authorUrl": "https://github.com/EinVaann",
   "isDesktopOnly": false

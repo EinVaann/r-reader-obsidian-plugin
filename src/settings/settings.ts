@@ -1,3 +1,5 @@
+import type { HighlightColor } from '../annotations/types';
+
 export type Theme = 'light' | 'dark' | 'sepia';
 export type ScrollMode = 'paginated' | 'continuous';
 
@@ -17,6 +19,10 @@ export interface PluginSettings {
   noImageMode: boolean;
   /** Close the quick-settings menu after jumping to a TOC chapter. */
   closeMenuAfterTocJump: boolean;
+  /** Vault folder where exported reading notes are written. */
+  notesExportFolder: string;
+  /** Default color used when creating a highlight. */
+  defaultHighlightColor: HighlightColor;
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -30,4 +36,6 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   detectAllExtensions: true,
   noImageMode: false,
   closeMenuAfterTocJump: true,
+  notesExportFolder: 'R Reader Notes',
+  defaultHighlightColor: 'yellow',
 };

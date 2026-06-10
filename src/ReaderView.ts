@@ -1,7 +1,15 @@
-import { FileView, Platform, TFile, WorkspaceLeaf, setIcon } from 'obsidian';
+import { FileView, Notice, Platform, TFile, WorkspaceLeaf, setIcon } from 'obsidian';
 import type RReaderPlugin from '../main';
 import { EpubReader } from './readers/EpubReader';
 import { MobileControls } from './mobile/MobileControls';
+import { SelectionToolbar } from './annotations/SelectionToolbar';
+import { TocPanel } from './toc/TocPanel';
+import { SearchController } from './search/SearchController';
+import { makeId } from './annotations/AnnotationManager';
+import type { Highlight, HighlightColor } from './annotations/types';
+import type { QuoteAnchor } from './annotations/anchor';
+import { exportBookNotes } from './export/exportNotes';
+import { metaAuthor, metaTitle, type BookMeta } from './util/bookMeta';
 import type { Reader, ReaderHost } from './types';
 import type { Theme } from './settings/settings';
 
@@ -37,9 +45,22 @@ export class ReaderView extends FileView implements ReaderHost {
   private sliderActive = false;
   private chromeHidden = false;
 
+  private selectionToolbar: SelectionToolbar | null = null;
+  private tocPanel: TocPanel | null = null;
+  private searchController: SearchController | null = null;
+  private tocButton: HTMLElement | null = null;
+  private searchButton: HTMLElement | null = null;
+  private lastQuery = '';
+  private currentFile: TFile | null = null;
+
   constructor(leaf: WorkspaceLeaf, plugin: RReaderPlugin) {
     super(leaf);
     this.plugin = plugin;
+  }
+
+  /** The active reader as an EpubReader (the only reader type today), or null. */
+  private get epub(): EpubReader | null {
+    return this.reader instanceof EpubReader ? this.reader : null;
   }
 
   getViewType(): string {
@@ -103,7 +124,17 @@ export class ReaderView extends FileView implements ReaderHost {
     const ext = file.extension.toLowerCase();
 
     if (ext === 'epub') {
-      this.reader = new EpubReader(content, file.path, settings, this.plugin.progressManager, this, this.plugin.epubCache, file.stat.mtime);
+      const highlights = this.plugin.annotationManager.get(file.path).highlights;
+      this.reader = new EpubReader(
+        content,
+        file.path,
+        settings,
+        this.plugin.progressManager,
+        this,
+        this.plugin.epubCache,
+        file.stat.mtime,
+        highlights,
+      );
     } else {
       content.createEl('p', { text: `Unsupported format: .${ext}` });
       return;
@@ -118,6 +149,8 @@ export class ReaderView extends FileView implements ReaderHost {
       console.error('R Reader: mount failed', e);
       return;
     }
+
+    this.setupAnnotationLayer(file);
 
     if (Platform.isMobile && settings.touchToScroll) {
       this.mobile = new MobileControls(
@@ -161,6 +194,16 @@ export class ReaderView extends FileView implements ReaderHost {
 
     // Left: version badge (also confirms which build is loaded) + title.
     bar.createDiv({ cls: 'rr-topbar-title', text: `v${this.plugin.manifest.version}` });
+
+    const toc = bar.createEl('button', { cls: 'rr-iconbtn', attr: { 'aria-label': 'Table of contents' } });
+    setIcon(toc, 'list');
+    toc.onclick = () => this.openTableOfContents();
+    this.tocButton = toc;
+
+    const search = bar.createEl('button', { cls: 'rr-iconbtn', attr: { 'aria-label': 'Search in book' } });
+    setIcon(search, 'search');
+    search.onclick = () => this.openSearch();
+    this.searchButton = search;
 
     const prev = bar.createEl('button', { cls: 'rr-iconbtn', attr: { 'aria-label': 'Previous' } });
     setIcon(prev, 'chevron-left');
@@ -237,6 +280,54 @@ export class ReaderView extends FileView implements ReaderHost {
     this.setChromeHidden(!this.chromeHidden);
   }
 
+  /** Wire up highlighting (selection toolbar + highlight-click editor). */
+  private setupAnnotationLayer(file: TFile): void {
+    const epub = this.epub;
+    if (!epub || !this.rootEl) return;
+    const contentEl = epub.getContentEl();
+    if (!contentEl) return;
+    this.currentFile = file;
+    const path = file.path;
+
+    const toolbar = new SelectionToolbar(this.rootEl, contentEl, {
+      captureSelection: () => epub.captureCurrentSelection(),
+      defaultColor: () => this.plugin.settings.defaultHighlightColor,
+      getHighlight: (id) => this.plugin.annotationManager.get(path).highlights.find((h) => h.id === id),
+      onCreate: (anchor: QuoteAnchor, color: HighlightColor): Highlight | null => {
+        const h: Highlight = {
+          id: makeId(),
+          chapterIndex: anchor.chapterIndex,
+          text: anchor.text,
+          prefix: anchor.prefix,
+          suffix: anchor.suffix,
+          color,
+          createdAt: Date.now(),
+        };
+        if (!epub.renderHighlight(h)) {
+          new Notice('R Reader: could not place that highlight');
+          return null;
+        }
+        void this.plugin.annotationManager.addHighlight(path, h);
+        return h;
+      },
+      onRecolor: (id, color) => {
+        epub.setHighlightColor(id, color);
+        void this.plugin.annotationManager.updateHighlight(path, id, { color });
+      },
+      onSetNote: (id, note) => {
+        void this.plugin.annotationManager.updateHighlight(path, id, { note });
+      },
+      onDelete: (id) => {
+        epub.removeHighlightSpans(id);
+        void this.plugin.annotationManager.removeHighlight(path, id);
+      },
+    });
+    toolbar.mount();
+    this.selectionToolbar = toolbar;
+
+    epub.onHighlightClick = (id, el) => toolbar.openHighlightEditor(id, el);
+  }
+
   // --- Public actions for command-palette commands ---
   /** Toggle distraction-free reading (hide the top/bottom bars). */
   toggleImmersive(): void {
@@ -248,9 +339,82 @@ export class ReaderView extends FileView implements ReaderHost {
     this.reader?.navigate(dir);
   }
 
-  /** Open the in-reader quick-settings popover (theme/font/TOC). */
+  /** Open the in-reader quick-settings popover (theme/font/bookmarks). */
   openQuickSettings(): void {
     if (this.rootEl) this.toggleSettingsPanel(this.rootEl);
+  }
+
+  /** Open the searchable table of contents (popover on desktop, overlay on mobile). */
+  openTableOfContents(): void {
+    const epub = this.epub;
+    if (!epub || !this.rootEl) return;
+    if (!this.tocPanel) {
+      this.tocPanel = new TocPanel(this.rootEl, {
+        getToc: () => epub.getToc(),
+        onJump: (entry) => epub.goToChapter(entry.index, entry.id),
+        isMobile: Platform.isMobile,
+        closeAfterJump: () => this.plugin.settings.closeMenuAfterTocJump,
+      });
+    }
+    this.tocPanel.toggle(this.tocButton ?? undefined);
+  }
+
+  /** Open the in-book search (popover on desktop, overlay on mobile). */
+  openSearch(): void {
+    const epub = this.epub;
+    if (!epub || !this.rootEl) return;
+    if (!this.searchController) {
+      this.searchController = new SearchController(this.rootEl, {
+        search: (q) => { this.lastQuery = q; return epub.search(q); },
+        onJump: (hit) => epub.jumpToMatch(hit.chapterIndex, this.lastQuery),
+        onClose: () => epub.clearSearchMark(),
+        isMobile: Platform.isMobile,
+      });
+    }
+    this.searchController.toggle(this.searchButton ?? undefined);
+  }
+
+  /** Bookmark the current reading position. */
+  async addBookmarkAtCurrent(): Promise<void> {
+    const epub = this.epub;
+    const file = this.currentFile;
+    if (!epub || !file) return;
+    const loc = epub.getCurrentLocation();
+    const toc = epub.getToc();
+    let label = '';
+    for (const e of toc) if (e.index >= 0 && e.index <= loc.chapterIndex) label = e.label;
+    const count = this.plugin.annotationManager.get(file.path).bookmarks.length;
+    const name = label || `Bookmark ${count + 1}`;
+    await this.plugin.annotationManager.addBookmark(file.path, {
+      id: makeId(),
+      chapterIndex: loc.chapterIndex,
+      anchorId: loc.anchorId,
+      fraction: loc.fraction,
+      name,
+      createdAt: Date.now(),
+    });
+    new Notice(`R Reader: bookmarked “${name}”`);
+  }
+
+  /** Export this book's highlights + bookmarks to a Markdown note. */
+  async exportNotes(): Promise<void> {
+    const epub = this.epub;
+    const file = this.currentFile;
+    if (!epub || !file) return;
+    const ann = this.plugin.annotationManager.get(file.path);
+    if (ann.highlights.length === 0 && ann.bookmarks.length === 0) {
+      new Notice('R Reader: no highlights or bookmarks to export yet');
+      return;
+    }
+    const meta = (epub.getMetadata() ?? {}) as BookMeta;
+    await exportBookNotes(
+      this.app,
+      file,
+      ann,
+      epub.getToc(),
+      { title: metaTitle(meta, file.basename), author: metaAuthor(meta) },
+      this.plugin.settings.notesExportFolder,
+    );
   }
 
   private setChromeHidden(hidden: boolean): void {
@@ -311,8 +475,53 @@ export class ReaderView extends FileView implements ReaderHost {
     // Font family row
     this.buildFontRow(panel);
 
-    // Table of contents row
-    this.buildTocRow(panel);
+    // Bookmarks list + add button
+    this.buildBookmarksSection(panel);
+
+    // Export reading notes
+    const exportRow = panel.createDiv({ cls: 'rr-qs-row' });
+    exportRow.createSpan({ text: 'Notes', cls: 'rr-qs-label' });
+    const exportBtn = exportRow.createEl('button', { cls: 'rr-qs-chip rr-qs-wide', text: 'Export to note' });
+    exportBtn.onclick = () => void this.exportNotes();
+  }
+
+  private buildBookmarksSection(panel: HTMLElement): void {
+    const epub = this.epub;
+    const file = this.currentFile;
+    if (!epub || !file) return;
+
+    const header = panel.createDiv({ cls: 'rr-qs-row' });
+    header.createSpan({ text: 'Bookmarks', cls: 'rr-qs-label' });
+    const add = header.createEl('button', { cls: 'rr-qs-chip', text: '+ Add' });
+    add.onclick = async () => {
+      await this.addBookmarkAtCurrent();
+      // Rebuild the list in place.
+      this.settingsPanel?.remove();
+      this.settingsPanel = null;
+      if (this.rootEl) this.toggleSettingsPanel(this.rootEl);
+    };
+
+    const bookmarks = this.plugin.annotationManager.get(file.path).bookmarks;
+    if (bookmarks.length === 0) return;
+
+    const list = panel.createDiv({ cls: 'rr-bookmark-list' });
+    for (const b of bookmarks) {
+      const row = list.createDiv({ cls: 'rr-bookmark-row' });
+      const jump = row.createEl('button', { cls: 'rr-bookmark-jump', text: b.name });
+      jump.onclick = () => {
+        epub.goToLocation(b);
+        if (this.plugin.settings.closeMenuAfterTocJump) {
+          this.settingsPanel?.remove();
+          this.settingsPanel = null;
+        }
+      };
+      const del = row.createEl('button', { cls: 'rr-bookmark-del', attr: { 'aria-label': 'Delete bookmark' } });
+      setIcon(del, 'trash-2');
+      del.onclick = async () => {
+        await this.plugin.annotationManager.removeBookmark(file.path, b.id);
+        row.remove();
+      };
+    }
   }
 
   private buildFontRow(panel: HTMLElement): void {
@@ -333,36 +542,6 @@ export class ReaderView extends FileView implements ReaderHost {
     select.onchange = async () => {
       this.plugin.settings.fontFamily = select.value;
       await this.plugin.saveSettings();
-    };
-  }
-
-  private buildTocRow(panel: HTMLElement): void {
-    const reader = this.reader;
-    if (!(reader instanceof EpubReader)) return;
-    const toc = reader.getToc();
-    if (toc.length === 0) return;
-
-    const row = panel.createDiv({ cls: 'rr-qs-row' });
-    row.createSpan({ text: 'Chapter', cls: 'rr-qs-label' });
-    const select = row.createEl('select', { cls: 'rr-qs-select' });
-    select.createEl('option', { text: `Contents (${toc.length})`, value: '' });
-
-    toc.forEach((entry, i) => {
-      const prefix = entry.depth > 0 ? `${' '.repeat(entry.depth)}` : '';
-      select.createEl('option', { text: `${prefix}${entry.label}`, value: String(i) });
-    });
-
-    select.onchange = () => {
-      const i = Number(select.value);
-      if (!select.value || Number.isNaN(i)) return;
-      const entry = toc[i];
-      reader.goToChapter(entry.index, entry.id);
-      if (this.plugin.settings.closeMenuAfterTocJump) {
-        this.settingsPanel?.remove();
-        this.settingsPanel = null;
-      } else {
-        select.value = ''; // reset to placeholder
-      }
     };
   }
 
@@ -395,6 +574,16 @@ export class ReaderView extends FileView implements ReaderHost {
   private teardown(): void {
     // Always restore Obsidian's chrome when leaving the reader.
     document.body.removeClass('rr-immersive');
+    this.selectionToolbar?.unmount();
+    this.selectionToolbar = null;
+    this.tocPanel?.close();
+    this.tocPanel = null;
+    this.searchController?.close();
+    this.searchController = null;
+    this.tocButton = null;
+    this.searchButton = null;
+    this.currentFile = null;
+    this.lastQuery = '';
     this.reader?.destroy();
     this.reader = null;
     this.mobile?.unmount();

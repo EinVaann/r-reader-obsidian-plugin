@@ -1,20 +1,28 @@
-import { Notice, Plugin } from 'obsidian';
+import { Notice, Plugin, WorkspaceLeaf } from 'obsidian';
 import { READER_VIEW_TYPE, ReaderView } from './src/ReaderView';
 import { RReaderSettingsTab } from './src/settings/SettingsTab';
 import { DEFAULT_SETTINGS, type PluginSettings, type Theme } from './src/settings/settings';
 import { ProgressManager } from './src/reading-progress/ProgressManager';
+import { AnnotationManager } from './src/annotations/AnnotationManager';
+import type { BookAnnotations, HighlightColor } from './src/annotations/types';
+import { HIGHLIGHT_COLORS } from './src/annotations/types';
+import { LIBRARY_VIEW_TYPE, LibraryView } from './src/library/LibraryView';
 import type { EpubCacheEntry } from './src/readers/EpubReader';
 
 interface RReaderData {
   settings?: Partial<PluginSettings>;
   progress?: Record<string, string | number>;
+  annotations?: Record<string, BookAnnotations>;
 }
 
 export default class RReaderPlugin extends Plugin {
   settings!: PluginSettings;
   progressManager!: ProgressManager;
+  annotationManager!: AnnotationManager;
   /** In-memory cache of rendered EPUB HTML. Cleared on demand or plugin unload. */
   epubCache = new Map<string, EpubCacheEntry>();
+  /** Session cache of cover object URLs for the library (path → blob URL). */
+  coverCache = new Map<string, string>();
 
   async onload(): Promise<void> {
     // Settings and reading progress share one data.json. Read both from a
@@ -28,8 +36,11 @@ export default class RReaderPlugin extends Plugin {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, settingsData);
     this.progressManager = new ProgressManager(this);
     this.progressManager.load(progressData);
+    this.annotationManager = new AnnotationManager(this);
+    this.annotationManager.load(raw?.annotations ?? {});
 
     this.registerView(READER_VIEW_TYPE, (leaf) => new ReaderView(leaf, this));
+    this.registerView(LIBRARY_VIEW_TYPE, (leaf) => new LibraryView(leaf, this));
     this.registerExtensions(['epub'], READER_VIEW_TYPE);
     this.applyFileVisibility();
 
@@ -51,14 +62,68 @@ export default class RReaderPlugin extends Plugin {
 
     this.addSettingTab(new RReaderSettingsTab(this.app, this));
 
-    // Ribbon opens the command palette so the reader commands are one tap away.
+    // Ribbon: open the library (the hub for all books).
+    this.addRibbonIcon('library', 'R Reader library', () => void this.openLibrary());
+    // Ribbon: command palette, for the in-reader actions.
     this.addRibbonIcon('book-open', 'R Reader commands', () => {
       (this.app as unknown as { commands: { executeCommandById: (id: string) => void } })
         .commands.executeCommandById('command-palette:open');
     });
 
     this.addReaderCommands();
+    this.addLibraryAndToolCommands();
+  }
 
+  /** Open (or reveal) the library view in a tab. */
+  async openLibrary(): Promise<void> {
+    const existing = this.app.workspace.getLeavesOfType(LIBRARY_VIEW_TYPE);
+    if (existing.length > 0) {
+      this.app.workspace.revealLeaf(existing[0]);
+      (existing[0].view as LibraryView).render();
+      return;
+    }
+    const leaf: WorkspaceLeaf = this.app.workspace.getLeaf(true);
+    await leaf.setViewState({ type: LIBRARY_VIEW_TYPE, active: true });
+    this.app.workspace.revealLeaf(leaf);
+  }
+
+  private addLibraryAndToolCommands(): void {
+    this.addCommand({
+      id: 'open-library',
+      name: 'Open R Reader library',
+      callback: () => void this.openLibrary(),
+    });
+    this.addCommand({
+      id: 'open-toc',
+      name: 'Open table of contents',
+      checkCallback: (checking) => this.readerCommand(checking, (v) => v.openTableOfContents()),
+    });
+    this.addCommand({
+      id: 'search-in-book',
+      name: 'Search in book',
+      checkCallback: (checking) => this.readerCommand(checking, (v) => v.openSearch()),
+    });
+    this.addCommand({
+      id: 'add-bookmark',
+      name: 'Add bookmark',
+      checkCallback: (checking) => this.readerCommand(checking, (v) => void v.addBookmarkAtCurrent()),
+    });
+    this.addCommand({
+      id: 'export-notes',
+      name: 'Export reading notes to a note',
+      checkCallback: (checking) => this.readerCommand(checking, (v) => void v.exportNotes()),
+    });
+    this.addCommand({
+      id: 'cycle-highlight-color',
+      name: 'Cycle default highlight color',
+      callback: () => {
+        const order = HIGHLIGHT_COLORS;
+        const next = order[(order.indexOf(this.settings.defaultHighlightColor) + 1) % order.length];
+        this.settings.defaultHighlightColor = next as HighlightColor;
+        void this.saveSettings();
+        new Notice(`R Reader: highlight color → ${next}`);
+      },
+    });
     this.addCommand({
       id: 'clear-epub-cache',
       name: 'Clear EPUB render cache',
@@ -161,13 +226,22 @@ export default class RReaderPlugin extends Plugin {
     }
   }
 
-  /** Persist settings and reading progress together. */
+  /** Persist settings, reading progress, and annotations together. */
   async persist(): Promise<void> {
     const data: RReaderData = {
       settings: this.settings,
       progress: this.progressManager.getAll(),
+      annotations: this.annotationManager.getAll(),
     };
     await this.saveData(data);
+  }
+
+  onunload(): void {
+    // Release library cover blob URLs (render-cache URLs are freed via clearEpubCache).
+    for (const url of this.coverCache.values()) {
+      try { URL.revokeObjectURL(url); } catch { /* ignore */ }
+    }
+    this.coverCache.clear();
   }
 
   async saveSettings(): Promise<void> {

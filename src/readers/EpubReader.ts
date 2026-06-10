@@ -1,6 +1,8 @@
 import type { PluginSettings } from '../settings/settings';
 import type { ProgressManager } from '../reading-progress/ProgressManager';
 import type { Reader, ReaderHost } from '../types';
+import type { Highlight, HighlightColor } from '../annotations/types';
+import { captureSelection, findRange, snippet, unwrapById, wrapRange, type QuoteAnchor } from '../annotations/anchor';
 
 // ce-guard must load before anything that registers custom elements.
 import '../ce-guard';
@@ -38,6 +40,20 @@ export interface TocEntry {
   depth: number;
 }
 
+/** A full-text search hit within the book. */
+export interface SearchHit {
+  chapterIndex: number;
+  label: string; // nearest TOC label for the chapter
+  snippet: string;
+}
+
+/** Current reading location, captured for bookmarks. */
+export interface ReaderLocation {
+  chapterIndex: number;
+  anchorId?: string;
+  fraction: number;
+}
+
 /** One entry in the in-memory EPUB render cache (keyed by file path). */
 export interface EpubCacheEntry {
   /** The rendered innerHTML of the content div. */
@@ -73,6 +89,13 @@ export class EpubReader implements Reader {
   private cache: Map<string, EpubCacheEntry> | null;
   private mtime: number;
 
+  /** Highlights to apply once the book is rendered. */
+  private initialHighlights: Highlight[] = [];
+  /** Called when the user taps an existing highlight span. */
+  onHighlightClick: ((id: string, el: HTMLElement) => void) | null = null;
+  /** Transient <mark> from the last search jump, cleared on the next jump. */
+  private searchMark: HTMLElement[] = [];
+
   constructor(
     container: HTMLElement,
     filePath: string,
@@ -81,6 +104,7 @@ export class EpubReader implements Reader {
     host: ReaderHost,
     cache: Map<string, EpubCacheEntry> | null = null,
     mtime = 0,
+    highlights: Highlight[] = [],
   ) {
     this.container = container;
     this.filePath = filePath;
@@ -89,6 +113,7 @@ export class EpubReader implements Reader {
     this.host = host;
     this.cache = cache;
     this.mtime = mtime;
+    this.initialHighlights = highlights;
   }
 
   async mount(fileArrayBuffer: ArrayBuffer): Promise<void> {
@@ -117,7 +142,7 @@ export class EpubReader implements Reader {
     // Cache check — skip the slow render loop if we have a fresh entry.
     const cached = this.cache?.get(this.filePath);
     if (cached && cached.mtime === this.mtime) {
-      // Cache hit: inject the pre-rendered HTML directly.
+      // Cache hit: inject the pre-rendered (clean, highlight-free) HTML.
       this.contentEl.innerHTML = cached.html;
     } else {
       // Cache miss (or stale): render every section and then store the result.
@@ -128,11 +153,16 @@ export class EpubReader implements Reader {
         await this.renderSection(i);
         // Surface load progress in the page indicator while building.
         this.host.setProgress(i + 1, this.sections.length, (i + 1) / this.sections.length);
+        // Reveal the reader as soon as the first chapter is in the DOM, then keep
+        // building the rest in the background, yielding so scroll/taps stay live.
+        if (i === 0) this.host.setLoading(false);
+        await this.yieldToEventLoop();
       }
       if (this.destroyed) return;
 
-      // Store result; transfer objectUrl ownership to cache so destroy() won't
-      // revoke them (the blob URLs must stay alive for cached re-opens).
+      // Store the CLEAN html (before highlights are applied) so editing a
+      // highlight never bakes stale highlight spans into the cache. Transfer
+      // objectUrl ownership to the cache so destroy() won't revoke them.
       if (this.cache) {
         this.cache.set(this.filePath, {
           html: this.contentEl.innerHTML,
@@ -147,6 +177,9 @@ export class EpubReader implements Reader {
     this.setupScrollTracking();
     this.host.setLoading(false);
 
+    // Apply saved highlights over the clean HTML (live pass, never cached).
+    this.applyHighlights(this.initialHighlights);
+
     // Restore saved position (stored as a 0..1 fraction of total scroll).
     const saved = this.progress.get(this.filePath);
     if (typeof saved === 'number' && saved > 0) {
@@ -154,6 +187,11 @@ export class EpubReader implements Reader {
       scroll.scrollTop = saved * max;
     }
     this.reportProgress();
+  }
+
+  /** Yield a frame so the WebView can paint/scroll between chapter renders. */
+  private yieldToEventLoop(): Promise<void> {
+    return new Promise((resolve) => requestAnimationFrame(() => resolve()));
   }
 
   private async renderSection(index: number): Promise<void> {
@@ -339,6 +377,14 @@ export class EpubReader implements Reader {
 
   /** Handle clicks on links inside the rendered book. */
   private handleContentClick = (e: MouseEvent): void => {
+    // A tap on an existing highlight opens its editor popover.
+    const hl = (e.target as HTMLElement).closest('.rr-highlight');
+    if (hl instanceof HTMLElement && hl.dataset.hlId && this.onHighlightClick) {
+      e.preventDefault();
+      this.onHighlightClick(hl.dataset.hlId, hl);
+      return;
+    }
+
     const anchor = (e.target as HTMLElement).closest('a');
     if (!anchor) return;
     const href = anchor.getAttribute('href');
@@ -397,6 +443,165 @@ export class EpubReader implements Reader {
     target.scrollIntoView({ block: 'start' });
   }
 
+  // --- Highlights ---
+
+  /** The live content element (used by the selection toolbar for positioning). */
+  getContentEl(): HTMLElement | null {
+    return this.contentEl;
+  }
+
+  getScrollEl(): HTMLElement | null {
+    return this.scrollEl;
+  }
+
+  private chapterEl(index: number): HTMLElement | null {
+    return this.contentEl?.querySelector<HTMLElement>(`.rr-chapter[data-index="${index}"]`) ?? null;
+  }
+
+  /** Capture the current selection as a re-anchorable quote, or null. */
+  captureCurrentSelection(): QuoteAnchor | null {
+    const sel = (this.contentEl?.ownerDocument ?? document).getSelection();
+    if (!sel) return null;
+    return captureSelection(sel);
+  }
+
+  /** Apply a list of highlights over the rendered DOM. */
+  applyHighlights(list: Highlight[]): void {
+    for (const h of list) this.renderHighlight(h);
+  }
+
+  /** Wrap a single highlight's text in styled spans. Returns true if anchored. */
+  renderHighlight(h: Highlight): boolean {
+    const chapter = this.chapterEl(h.chapterIndex);
+    if (!chapter) return false;
+    // Avoid double-wrapping if it's already present.
+    if (chapter.querySelector(`span[data-hl-id="${CSS.escape(h.id)}"]`)) return true;
+    const range = findRange(chapter, h);
+    if (!range) return false;
+    wrapRange(range, `rr-highlight rr-hl-${h.color}`, { hlId: h.id });
+    return true;
+  }
+
+  /** Recolor an existing highlight's spans in place. */
+  setHighlightColor(id: string, color: HighlightColor): void {
+    this.contentEl
+      ?.querySelectorAll<HTMLElement>(`span[data-hl-id="${CSS.escape(id)}"]`)
+      .forEach((span) => {
+        span.className = `rr-highlight rr-hl-${color}`;
+      });
+  }
+
+  /** Remove a highlight's spans and restore the underlying text. */
+  removeHighlightSpans(id: string): void {
+    if (this.contentEl) unwrapById(this.contentEl, id);
+  }
+
+  // --- Full-text search ---
+
+  /** Nearest TOC label for a chapter index (for search result rows). */
+  private labelForChapter(index: number): string {
+    const toc = this.getToc();
+    let best = '';
+    for (const e of toc) {
+      if (e.index >= 0 && e.index <= index) best = e.label;
+    }
+    return best || `Chapter ${index + 1}`;
+  }
+
+  /** Search the rendered chapters (text read straight from the DOM). */
+  search(query: string, limit = 100): SearchHit[] {
+    const q = query.trim().toLowerCase();
+    const hits: SearchHit[] = [];
+    if (q.length < 2 || !this.contentEl) return hits;
+    const chapters = this.contentEl.querySelectorAll<HTMLElement>('.rr-chapter');
+    for (const chapter of Array.from(chapters)) {
+      const index = Number(chapter.dataset.index);
+      const text = chapter.innerText;
+      const lower = text.toLowerCase();
+      let from = 0;
+      let idx = lower.indexOf(q, from);
+      let perChapter = 0;
+      while (idx >= 0 && hits.length < limit && perChapter < 20) {
+        hits.push({ chapterIndex: index, label: this.labelForChapter(index), snippet: snippet(text, idx, q.length) });
+        perChapter++;
+        from = idx + q.length;
+        idx = lower.indexOf(q, from);
+      }
+      if (hits.length >= limit) break;
+    }
+    return hits;
+  }
+
+  /** Scroll to the first match of `query` within a chapter and flash it. */
+  jumpToMatch(chapterIndex: number, query: string): void {
+    this.clearSearchMark();
+    const chapter = this.chapterEl(chapterIndex);
+    if (!chapter) return;
+    const range = findRange(chapter, { text: this.firstMatchText(chapter, query), prefix: '', suffix: '' });
+    if (range) {
+      this.searchMark = wrapRange(range, 'rr-search-hit', {});
+      this.searchMark[0]?.scrollIntoView({ block: 'center' });
+    } else {
+      chapter.scrollIntoView({ block: 'start' });
+    }
+  }
+
+  /** Exact-cased substring as it appears in the chapter (for accurate wrapping). */
+  private firstMatchText(chapter: HTMLElement, query: string): string {
+    const text = chapter.innerText;
+    const idx = text.toLowerCase().indexOf(query.trim().toLowerCase());
+    return idx >= 0 ? text.slice(idx, idx + query.trim().length) : query;
+  }
+
+  clearSearchMark(): void {
+    for (const m of this.searchMark) {
+      const parent = m.parentNode;
+      if (!parent) continue;
+      while (m.firstChild) parent.insertBefore(m.firstChild, m);
+      parent.removeChild(m);
+      parent.normalize();
+    }
+    this.searchMark = [];
+  }
+
+  // --- Bookmarks ---
+
+  /** Capture the current reading position for a bookmark. */
+  getCurrentLocation(): ReaderLocation {
+    const el = this.scrollEl;
+    const max = el ? el.scrollHeight - el.clientHeight : 0;
+    const fraction = el && max > 0 ? el.scrollTop / max : 0;
+    // Topmost chapter currently in view.
+    let chapterIndex = 0;
+    let anchorId: string | undefined;
+    if (el && this.contentEl) {
+      const top = el.scrollTop;
+      const chapters = this.contentEl.querySelectorAll<HTMLElement>('.rr-chapter');
+      for (const chapter of Array.from(chapters)) {
+        if (chapter.offsetTop <= top + 4) chapterIndex = Number(chapter.dataset.index);
+        else break;
+      }
+      // Nearest element with an id at/above the fold, for precise restore.
+      const withId = this.contentEl.querySelectorAll<HTMLElement>('[id]');
+      for (const node of Array.from(withId)) {
+        if (node.offsetTop <= top + el.clientHeight * 0.5) anchorId = node.id;
+        else break;
+      }
+    }
+    return { chapterIndex, anchorId, fraction };
+  }
+
+  /** Jump to a saved bookmark location. */
+  goToLocation(loc: { chapterIndex: number; anchorId?: string; fraction?: number }): void {
+    if (loc.anchorId && this.contentEl?.querySelector(`#${CSS.escape(loc.anchorId)}`)) {
+      this.goToChapter(loc.chapterIndex, loc.anchorId);
+    } else if (this.chapterEl(loc.chapterIndex)) {
+      this.goToChapter(loc.chapterIndex);
+    } else if (typeof loc.fraction === 'number') {
+      this.seek(loc.fraction);
+    }
+  }
+
   destroy(): void {
     this.destroyed = true;
     if (this.scrollEl && this.scrollHandler) {
@@ -419,11 +624,18 @@ export class EpubReader implements Reader {
       }
     }
     this.contentEl?.removeEventListener('click', this.handleContentClick);
+    this.onHighlightClick = null;
+    this.searchMark = [];
     this.scrollHandler = null;
     this.scrollEl = null;
     this.contentEl = null;
     this.styleEl = null;
     this.sections = [];
     this.book = null;
+  }
+
+  /** The book's metadata (title/author) once parsed; used by the library. */
+  getMetadata(): { title?: string } | null {
+    return this.book?.metadata ?? null;
   }
 }
