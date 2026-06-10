@@ -489,8 +489,10 @@ body.rr-immersive .status-bar {
   flex-direction: column;
   background: var(--background-primary);
   font-family: var(--font-interface);
-  padding-top: max(env(safe-area-inset-top), 12px);
-  padding-bottom: max(env(safe-area-inset-bottom), 12px);
+  /* Clear the phone status bar / notch (top) and gesture/nav bar (bottom).
+     env() insets are 0 in Obsidian's WebView, so use solid fallbacks. */
+  padding-top: max(env(safe-area-inset-top), 44px);
+  padding-bottom: max(env(safe-area-inset-bottom), 24px);
 }
 .rr-toc-header,
 .rr-search-header {
