@@ -56,6 +56,12 @@
   padding: 0;
 }
 .rr-st-swatch:hover { transform: scale(1.1); }
+/* Solid swatch fills (compound selector beats the app's `button` styling, and
+   full opacity beats the translucent highlight backgrounds). */
+.rr-st-swatch.rr-hl-yellow { background: #ffd640; }
+.rr-st-swatch.rr-hl-green  { background: #69dc7c; }
+.rr-st-swatch.rr-hl-blue   { background: #5eaeff; }
+.rr-st-swatch.rr-hl-pink   { background: #ff8ac4; }
 .rr-st-note,
 .rr-hl-done,
 .rr-hl-delete {

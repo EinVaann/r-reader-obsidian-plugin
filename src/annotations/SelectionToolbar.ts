@@ -27,6 +27,7 @@ export class SelectionToolbar {
   private editor: HTMLElement | null = null;
   private selectionListener: (() => void) | null = null;
   private outsideListener: ((e: Event) => void) | null = null;
+  private contextListener: ((e: Event) => void) | null = null;
   /** Anchor captured the moment the bar is shown (selection is still live). */
   private pendingAnchor: QuoteAnchor | null = null;
 
@@ -53,16 +54,33 @@ export class SelectionToolbar {
       if (this.editor && !this.editor.contains(t)) this.hideEditor();
     };
     doc.addEventListener('pointerdown', this.outsideListener, true);
+
+    // On mobile, suppress the native selection menu (Copy / Translate / Share)
+    // over book text so our own highlight toolbar is what the user sees.
+    if (Platform.isMobile) {
+      this.contextListener = (e: Event) => {
+        if (this.isSelectionInContent()) e.preventDefault();
+      };
+      this.contentEl.addEventListener('contextmenu', this.contextListener);
+    }
   }
 
   unmount(): void {
     const doc = this.contentEl.ownerDocument;
     if (this.selectionListener) doc.removeEventListener('selectionchange', this.selectionListener);
     if (this.outsideListener) doc.removeEventListener('pointerdown', this.outsideListener, true);
+    if (this.contextListener) this.contentEl.removeEventListener('contextmenu', this.contextListener);
     this.selectionListener = null;
     this.outsideListener = null;
+    this.contextListener = null;
     this.hideBar();
     this.hideEditor();
+  }
+
+  /** Floating popovers attach to <body> so no contained/overflow-hidden ancestor
+   *  clips them and `position: fixed` is measured against the real viewport. */
+  private get layer(): HTMLElement {
+    return this.contentEl.ownerDocument.body;
   }
 
   private isSelectionInContent(): boolean {
@@ -96,7 +114,7 @@ export class SelectionToolbar {
     if (!this.pendingAnchor) return;
 
     if (!this.bar) {
-      this.bar = this.rootEl.createDiv({ cls: 'rr-selection-toolbar' });
+      this.bar = this.layer.createDiv({ cls: 'rr-selection-toolbar' });
       // Preserve the text selection: prevent mousedown/touchstart inside the
       // toolbar from clearing it before our click handlers run.
       const preserve = (e: Event) => e.preventDefault();
@@ -138,7 +156,7 @@ export class SelectionToolbar {
     const h = this.host.getHighlight(id);
     if (!h) return;
 
-    const editor = this.rootEl.createDiv({ cls: 'rr-hl-editor' });
+    const editor = this.layer.createDiv({ cls: 'rr-hl-editor' });
     this.editor = editor;
 
     // Color row.
