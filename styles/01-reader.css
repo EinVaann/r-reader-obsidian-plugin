@@ -84,6 +84,17 @@
   /* typography is injected at runtime (font/theme/size) */
   word-wrap: break-word;
   overflow-wrap: break-word;
+  /* Re-enable text selection: Obsidian (esp. mobile) sets user-select:none on
+     its chrome, which the reader content would otherwise inherit — blocking
+     highlighting. Force it back on for the book text. */
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+/* Children must opt in too, in case the app set user-select:none directly. */
+.rr-epub-content * {
+  -webkit-user-select: text;
+  user-select: text;
 }
 .rr-img-placeholder {
   display: inline-block;

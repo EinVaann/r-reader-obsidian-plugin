@@ -17,6 +17,7 @@ export class MobileControls {
   private removeVolDown?: () => void;
   private touchStartY = 0;
   private touchStartX = 0;
+  private touchStartTime = 0;
   private touchHandlerStart?: (e: TouchEvent) => void;
   private touchHandlerEnd?: (e: TouchEvent) => void;
 
@@ -54,12 +55,20 @@ export class MobileControls {
     this.touchHandlerStart = (e: TouchEvent) => {
       this.touchStartY = e.touches[0].clientY;
       this.touchStartX = e.touches[0].clientX;
+      this.touchStartTime = Date.now();
     };
     this.touchHandlerEnd = (e: TouchEvent) => {
       const dy = e.changedTouches[0].clientY - this.touchStartY;
       const dx = e.changedTouches[0].clientX - this.touchStartX;
       // Only treat as a tap (ignore swipes / normal scrolling)
       if (Math.abs(dy) > 10 || Math.abs(dx) > 10) return;
+
+      // A long-press starts a text selection (highlighting), not a page turn.
+      if (Date.now() - this.touchStartTime > 400) return;
+
+      // If text is currently selected, the tap is for selecting/dismissing it.
+      const sel = this.el.ownerDocument.getSelection();
+      if (sel && !sel.isCollapsed && sel.toString().trim()) return;
 
       const rect = this.el.getBoundingClientRect();
       const relY = e.changedTouches[0].clientY - rect.top;
