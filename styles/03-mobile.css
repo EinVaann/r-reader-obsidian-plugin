@@ -1,0 +1,49 @@
+/* ---- Mobile layout ---- */
+/* On mobile the bars FLOAT over the content (pinned to the screen edges), so
+   they can't be pushed off-screen by WebView height quirks. */
+.rr-mobile .rr-content {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+.rr-mobile .rr-topbar,
+.rr-mobile .rr-bottombar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 10;
+}
+.rr-mobile .rr-topbar {
+  top: 0;
+  justify-content: space-between;
+  padding-top: calc(6px + env(safe-area-inset-top));
+}
+.rr-mobile .rr-bottombar {
+  /* Sit above Obsidian's own bottom navbar (height measured at runtime). */
+  bottom: var(--rr-navbar-h, 50px);
+  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.25);
+}
+/* On mobile the page index lives in the bottom slider, not the top bar.
+   Hide prev/next (you scroll/tap), but keep TOC + search + gear visible. */
+.rr-mobile .rr-topbar .rr-page-indicator,
+.rr-mobile .rr-topbar .rr-iconbtn:not(.rr-gear):not(.rr-keep-mobile) {
+  display: none;
+}
+.rr-mobile .rr-topbar .rr-iconbtn.rr-keep-mobile {
+  display: flex;
+}
+/* No top padding (per request); keep bottom room so text clears the bottom bar. */
+.rr-mobile .rr-epub-content {
+  padding: 0 0.9em 5em;
+}
+/* Bigger touch target for the slider thumb on mobile. */
+.rr-mobile .rr-slider {
+  height: 30px;
+}
+.rr-mobile .rr-slider-thumb {
+  width: 22px;
+  height: 22px;
+  margin-left: -11px;
+  margin-top: -11px;
+}
+

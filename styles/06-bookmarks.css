@@ -1,0 +1,35 @@
+/* ===================== Quick-settings extras ===================== */
+.rr-qs-chip.rr-qs-wide { flex: 1 1 auto; text-align: center; text-transform: none; }
+.rr-bookmark-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.rr-bookmark-row { display: flex; align-items: center; gap: 6px; }
+.rr-bookmark-jump {
+  flex: 1 1 auto;
+  text-align: left;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rr-bookmark-jump:hover { background: var(--background-modifier-hover); }
+.rr-bookmark-del {
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.rr-bookmark-del:hover { color: var(--text-error); }
+

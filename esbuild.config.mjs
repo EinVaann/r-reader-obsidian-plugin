@@ -1,8 +1,15 @@
 import esbuild from "esbuild";
 import process from "process";
 import builtins from "builtin-modules";
+import { watch } from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import { buildCss } from "./build-css.mjs";
 
 const prod = process.argv[2] === "production";
+
+// Concatenate the CSS partials in styles/ into the single styles.css Obsidian loads.
+await buildCss();
 
 // foliate-js's own PDF support (pdf.js) uses top-level await, which can't be
 // bundled into a CommonJS file. We never hand foliate a PDF (we render PDFs
@@ -58,4 +65,9 @@ if (prod) {
   process.exit(0);
 } else {
   await context.watch();
+  // Rebuild styles.css whenever a partial under styles/ changes.
+  const stylesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "styles");
+  watch(stylesDir, { persistent: true }, () => {
+    void buildCss().then(() => console.log("styles.css rebuilt")).catch((e) => console.error(e));
+  });
 }

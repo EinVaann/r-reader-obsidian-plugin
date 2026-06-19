@@ -1,0 +1,87 @@
+/* ===================== Highlights ===================== */
+.rr-highlight {
+  border-radius: 2px;
+  padding: 0 1px;
+  cursor: pointer;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  transition: filter 0.1s ease;
+}
+.rr-highlight:hover { filter: brightness(0.92); }
+.rr-hl-yellow { background: rgba(255, 214, 64, 0.45); }
+.rr-hl-green  { background: rgba(105, 220, 124, 0.42); }
+.rr-hl-blue   { background: rgba(94, 174, 255, 0.40); }
+.rr-hl-pink   { background: rgba(255, 138, 196, 0.42); }
+
+/* Transient search match flash */
+.rr-search-hit {
+  background: var(--text-highlight-bg, rgba(255, 208, 0, 0.7));
+  color: inherit;
+  border-radius: 2px;
+  animation: rr-flash 1.2s ease;
+}
+@keyframes rr-flash {
+  0%, 40% { background: var(--interactive-accent); color: var(--text-on-accent); }
+  100% { background: var(--text-highlight-bg, rgba(255, 208, 0, 0.7)); }
+}
+
+/* ============ Selection toolbar + highlight editor ============ */
+.rr-selection-toolbar,
+.rr-hl-editor {
+  position: fixed;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+  font-family: var(--font-interface);
+}
+.rr-hl-editor {
+  flex-direction: column;
+  align-items: stretch;
+  width: 240px;
+  gap: 10px;
+}
+.rr-st-swatches { display: flex; gap: 8px; }
+.rr-st-swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid var(--background-modifier-border);
+  cursor: pointer;
+  padding: 0;
+}
+.rr-st-swatch:hover { transform: scale(1.1); }
+.rr-st-note,
+.rr-hl-done,
+.rr-hl-delete {
+  padding: 4px 12px;
+  border-radius: 6px;
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  cursor: pointer;
+  font-family: var(--font-interface);
+  font-size: 13px;
+}
+.rr-st-note:hover,
+.rr-hl-done:hover { background: var(--background-modifier-hover); }
+.rr-hl-note {
+  width: 100%;
+  min-height: 64px;
+  resize: vertical;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  border: 1px solid var(--background-modifier-border);
+  font-family: var(--font-interface);
+  font-size: 13px;
+}
+.rr-hl-actions { display: flex; justify-content: space-between; }
+.rr-hl-delete { background: transparent; color: var(--text-error); }
+.rr-hl-delete:hover { background: var(--background-modifier-error-hover, rgba(255,0,0,0.1)); }
+

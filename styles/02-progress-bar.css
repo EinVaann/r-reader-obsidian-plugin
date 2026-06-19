@@ -1,0 +1,87 @@
+/* ---- Bottom progress bar + slider ---- */
+.rr-bottombar {
+  flex: 0 0 auto;
+  /* Block layout (not flex): guarantees the range input fills full width. */
+  display: block;
+  padding: 8px 14px;
+  border-top: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+}
+/* Custom slider (divs, not a native range input). */
+.rr-slider {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 24px;
+  cursor: pointer;
+  touch-action: none;
+}
+.rr-slider-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 4px;
+  margin-top: -2px;
+  border-radius: 2px;
+  background: var(--background-modifier-border);
+}
+.rr-slider-fill {
+  position: absolute;
+  left: 0;
+  width: 0%;
+  top: 50%;
+  height: 4px;
+  margin-top: -2px;
+  border-radius: 2px;
+  background: var(--interactive-accent);
+}
+.rr-slider-thumb {
+  position: absolute;
+  left: 0%;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin-left: -8px;
+  margin-top: -8px;
+  border-radius: 50%;
+  background: var(--interactive-accent);
+}
+.rr-slider-label {
+  display: block;
+  text-align: center;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-family: var(--font-interface);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Immersive: hide top/bottom chrome ---- */
+.rr-chrome-hidden .rr-topbar,
+.rr-chrome-hidden .rr-bottombar {
+  display: none;
+}
+
+/* Hide Obsidian's own mobile chrome for a full-screen read. */
+body.rr-immersive .view-header,
+body.rr-immersive .mobile-navbar,
+body.rr-immersive .status-bar {
+  display: none !important;
+}
+/* In immersive mode our bars are gone, so inset the content past the device's
+   system status bar (top) and navigation/gesture bar (bottom) so text isn't
+   clipped. env() with a fallback for devices that don't report safe areas. */
+/* Immersive on mobile: fill the entire device viewport (over Obsidian's
+   layout) for full-screen reading. */
+.rr-reader-root.rr-mobile.rr-chrome-hidden {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+}
+/* Keep text clear of the phone's status bar (top) and nav/gesture bar (bottom). */
+.rr-reader-root.rr-mobile.rr-chrome-hidden .rr-content {
+  top: max(env(safe-area-inset-top), 36px);
+  bottom: max(env(safe-area-inset-bottom), 16px);
+}
+

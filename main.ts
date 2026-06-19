@@ -12,6 +12,7 @@ import type { EpubCacheEntry } from './src/readers/EpubReader';
 interface RReaderData {
   settings?: Partial<PluginSettings>;
   progress?: Record<string, string | number>;
+  lastRead?: Record<string, number>;
   annotations?: Record<string, BookAnnotations>;
 }
 
@@ -32,10 +33,11 @@ export default class RReaderPlugin extends Plugin {
     const settingsData: Partial<PluginSettings> = raw?.settings
       ?? (raw && 'theme' in raw ? (raw as Partial<PluginSettings>) : {});
     const progressData = raw?.progress ?? {};
+    const lastReadData = raw?.lastRead ?? {};
 
     this.settings = Object.assign({}, DEFAULT_SETTINGS, settingsData);
     this.progressManager = new ProgressManager(this);
-    this.progressManager.load(progressData);
+    this.progressManager.load(progressData, lastReadData);
     this.annotationManager = new AnnotationManager(this);
     this.annotationManager.load(raw?.annotations ?? {});
 
@@ -64,11 +66,6 @@ export default class RReaderPlugin extends Plugin {
 
     // Ribbon: open the library (the hub for all books).
     this.addRibbonIcon('library', 'R Reader library', () => void this.openLibrary());
-    // Ribbon: command palette, for the in-reader actions.
-    this.addRibbonIcon('book-open', 'R Reader commands', () => {
-      (this.app as unknown as { commands: { executeCommandById: (id: string) => void } })
-        .commands.executeCommandById('command-palette:open');
-    });
 
     this.addReaderCommands();
     this.addLibraryAndToolCommands();
@@ -231,6 +228,7 @@ export default class RReaderPlugin extends Plugin {
     const data: RReaderData = {
       settings: this.settings,
       progress: this.progressManager.getAll(),
+      lastRead: this.progressManager.getAllLastRead(),
       annotations: this.annotationManager.getAll(),
     };
     await this.saveData(data);
