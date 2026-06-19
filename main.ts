@@ -7,6 +7,7 @@ import { AnnotationManager } from './src/annotations/AnnotationManager';
 import type { BookAnnotations, HighlightColor } from './src/annotations/types';
 import { HIGHLIGHT_COLORS } from './src/annotations/types';
 import { LIBRARY_VIEW_TYPE, LibraryView } from './src/library/LibraryView';
+import { CoverCache } from './src/library/CoverCache';
 import type { EpubCacheEntry } from './src/readers/EpubReader';
 
 interface RReaderData {
@@ -22,8 +23,8 @@ export default class RReaderPlugin extends Plugin {
   annotationManager!: AnnotationManager;
   /** In-memory cache of rendered EPUB HTML. Cleared on demand or plugin unload. */
   epubCache = new Map<string, EpubCacheEntry>();
-  /** Session cache of cover object URLs for the library (path → blob URL). */
-  coverCache = new Map<string, string>();
+  /** Library cover thumbnails + metadata, persisted to the plugin folder. */
+  coverCache = new CoverCache(this);
 
   async onload(): Promise<void> {
     // Settings and reading progress share one data.json. Read both from a
@@ -236,10 +237,7 @@ export default class RReaderPlugin extends Plugin {
 
   onunload(): void {
     // Release library cover blob URLs (render-cache URLs are freed via clearEpubCache).
-    for (const url of this.coverCache.values()) {
-      try { URL.revokeObjectURL(url); } catch { /* ignore */ }
-    }
-    this.coverCache.clear();
+    this.coverCache.dispose();
   }
 
   async saveSettings(): Promise<void> {

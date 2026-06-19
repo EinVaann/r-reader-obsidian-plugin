@@ -23,6 +23,10 @@ export interface PluginSettings {
   notesExportFolder: string;
   /** Default color used when creating a highlight. */
   defaultHighlightColor: HighlightColor;
+  /** Group the library by folder (vs. one flat grid). */
+  libraryGroupByFolder: boolean;
+  /** Library section keys (folder paths / "__recent" / "__all") collapsed by the user. */
+  libraryCollapsed: string[];
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -38,4 +42,6 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   closeMenuAfterTocJump: true,
   notesExportFolder: 'R Reader Notes',
   defaultHighlightColor: 'yellow',
+  libraryGroupByFolder: true,
+  libraryCollapsed: [],
 };
