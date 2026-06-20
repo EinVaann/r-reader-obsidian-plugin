@@ -7,6 +7,8 @@
   margin-bottom: 16px;
 }
 .rr-library-header h2 { margin: 0; }
+.rr-library-actions { display: flex; align-items: center; gap: 8px; }
+.rr-library-refresh:disabled { opacity: 0.6; cursor: default; }
 .rr-library-refresh {
   padding: 5px 12px;
   border-radius: 6px;

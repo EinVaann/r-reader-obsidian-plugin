@@ -73,6 +73,25 @@ export class CoverCache {
     }
   }
 
+  /**
+   * Force re-extraction of every book's cover + metadata: drop the on-disk
+   * index and session object URLs so the next render re-parses each EPUB.
+   * Cached thumbnail files are overwritten as books are re-extracted.
+   */
+  async invalidateAll(): Promise<void> {
+    await this.ensureIndex();
+    this.index = {};
+    for (const url of this.memUrls.values()) {
+      try { URL.revokeObjectURL(url); } catch { /* ignore */ }
+    }
+    this.memUrls.clear();
+    if (this.saveTimer != null) {
+      window.clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+    }
+    await this.flush();
+  }
+
   private async resolve(file: TFile): Promise<CoverDetails> {
     await this.ensureIndex();
     const index = this.index!;

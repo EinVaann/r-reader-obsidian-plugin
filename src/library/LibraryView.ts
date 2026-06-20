@@ -1,4 +1,4 @@
-import { ItemView, TFile, WorkspaceLeaf, setIcon } from 'obsidian';
+import { ItemView, Notice, TFile, WorkspaceLeaf, setIcon } from 'obsidian';
 import type RReaderPlugin from '../../main';
 
 export const LIBRARY_VIEW_TYPE = 'r-reader-library';
@@ -50,8 +50,23 @@ export class LibraryView extends ItemView {
 
     const header = container.createDiv({ cls: 'rr-library-header' });
     header.createEl('h2', { text: 'Library' });
-    const refresh = header.createEl('button', { cls: 'rr-library-refresh', text: 'Refresh' });
+    const actions = header.createDiv({ cls: 'rr-library-actions' });
+    const refresh = actions.createEl('button', { cls: 'rr-library-refresh', text: 'Refresh' });
     refresh.onclick = () => this.render();
+
+    // Force re-extraction of covers + metadata (ignores the disk cache).
+    const refreshMeta = actions.createEl('button', {
+      cls: 'rr-library-refresh',
+      text: 'Refresh meta',
+      attr: { title: 'Re-extract covers and metadata for all books' },
+    });
+    refreshMeta.onclick = async () => {
+      refreshMeta.disabled = true;
+      refreshMeta.setText('Refreshing…');
+      await this.plugin.coverCache.invalidateAll();
+      new Notice('R Reader: rebuilding covers & metadata');
+      this.render();
+    };
 
     // Controls: search box + group-by-folder toggle.
     const controls = container.createDiv({ cls: 'rr-library-controls' });
