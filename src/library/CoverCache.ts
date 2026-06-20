@@ -8,6 +8,8 @@ import { metaAuthor, metaTitle, type BookMeta } from '../util/bookMeta';
 const THUMB_MAX = 320;
 /** How many EPUBs we'll parse at once on a cold cache (cold-scroll throttle). */
 const MAX_CONCURRENT = 3;
+/** Console prefix for cover-pipeline diagnostics. */
+const LOG = '[R Reader cover]';
 
 interface FoliateBookLite {
   metadata?: BookMeta;
@@ -102,7 +104,13 @@ export class CoverCache {
     if (entry && entry.sig === sig) {
       const coverUrl = entry.thumb ? await this.urlForThumb(file.path, entry.thumb) : null;
       // If the thumbnail file vanished, fall through to re-extract it.
-      if (!entry.thumb || coverUrl) return { coverUrl, title: entry.title, author: entry.author };
+      if (!entry.thumb || coverUrl) {
+        console.debug(`${LOG} cache hit: ${file.path} (thumb=${entry.thumb ?? 'none'})`);
+        return { coverUrl, title: entry.title, author: entry.author };
+      }
+      console.debug(`${LOG} cache stale (thumb missing on disk): ${file.path} → re-extract`);
+    } else {
+      console.debug(`${LOG} cache miss: ${file.path} → extract`);
     }
 
     // Miss: parse the EPUB once (throttled), extract + downscale + persist.
@@ -110,28 +118,48 @@ export class CoverCache {
   }
 
   private async extract(file: TFile, sig: string): Promise<CoverDetails> {
-    const buf = await this.plugin.app.vault.readBinary(file);
-    const f = new File([buf], file.name, { type: 'application/epub+zip' });
-    const book = (await makeBook(f)) as FoliateBookLite;
+    console.log(`${LOG} extracting: ${file.path}`);
+    try {
+      const buf = await this.plugin.app.vault.readBinary(file);
+      console.debug(`${LOG} read ${buf.byteLength} bytes for ${file.basename}`);
 
-    let thumbName: string | undefined;
-    let coverUrl: string | null = null;
-    const blob = book.getCover ? await book.getCover() : null;
-    if (blob) {
-      const jpeg = await downscaleToJpeg(blob, THUMB_MAX);
-      if (jpeg) {
-        thumbName = `${hash(file.path)}.jpg`;
-        await this.writeThumb(thumbName, jpeg);
-        coverUrl = this.makeUrl(file.path, jpeg);
+      const f = new File([buf], file.name, { type: 'application/epub+zip' });
+      const book = (await makeBook(f)) as FoliateBookLite;
+      console.debug(
+        `${LOG} parsed: getCover=${typeof book.getCover === 'function'}, hasMetadata=${!!book.metadata}`,
+      );
+
+      let thumbName: string | undefined;
+      let coverUrl: string | null = null;
+      const blob = book.getCover ? await book.getCover() : null;
+      console.debug(
+        `${LOG} cover blob for ${file.basename}: ${blob ? `${blob.size} bytes (${blob.type || 'no type'})` : 'NONE'}`,
+      );
+      if (blob) {
+        const jpeg = await downscaleToJpeg(blob, THUMB_MAX);
+        console.debug(`${LOG} downscaled: ${jpeg ? `${jpeg.byteLength} bytes` : 'FAILED'}`);
+        if (jpeg) {
+          thumbName = `${hash(file.path)}.jpg`;
+          await this.writeThumb(thumbName, jpeg);
+          coverUrl = this.makeUrl(file.path, jpeg);
+          console.debug(`${LOG} wrote thumbnail ${thumbName} for ${file.basename}`);
+        }
       }
+
+      const title = book.metadata ? metaTitle(book.metadata, '') || undefined : undefined;
+      const author = book.metadata ? metaAuthor(book.metadata) : undefined;
+      console.log(
+        `${LOG} done: ${file.basename} → cover=${coverUrl ? 'yes' : 'no'}, title=${title ?? '∅'}, author=${author ?? '∅'}`,
+      );
+
+      this.index![file.path] = { sig, title, author, thumb: thumbName };
+      this.scheduleSave();
+      return { coverUrl, title, author };
+    } catch (e) {
+      console.error(`${LOG} extract FAILED for ${file.path}:`, e);
+      // Don't cache a failure, so a later "Refresh meta" retries cleanly.
+      return { coverUrl: null };
     }
-
-    const title = book.metadata ? metaTitle(book.metadata, '') || undefined : undefined;
-    const author = book.metadata ? metaAuthor(book.metadata) : undefined;
-
-    this.index![file.path] = { sig, title, author, thumb: thumbName };
-    this.scheduleSave();
-    return { coverUrl, title, author };
   }
 
   // ---- storage helpers -------------------------------------------------
@@ -233,6 +261,7 @@ async function downscaleToJpeg(blob: Blob, maxEdge: number): Promise<ArrayBuffer
   const url = URL.createObjectURL(blob);
   try {
     const img = await loadImage(url);
+    console.debug(`${LOG} decoded cover image ${img.naturalWidth}×${img.naturalHeight}`);
     const scale = Math.min(1, maxEdge / Math.max(img.naturalWidth, img.naturalHeight));
     const w = Math.max(1, Math.round(img.naturalWidth * scale));
     const h = Math.max(1, Math.round(img.naturalHeight * scale));
