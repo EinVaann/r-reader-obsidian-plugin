@@ -118,39 +118,43 @@ export class CoverCache {
   }
 
   private async extract(file: TFile, sig: string): Promise<CoverDetails> {
-    console.log(`${LOG} extracting: ${file.path}`);
     try {
       const buf = await this.plugin.app.vault.readBinary(file);
-      console.debug(`${LOG} read ${buf.byteLength} bytes for ${file.basename}`);
-
       const f = new File([buf], file.name, { type: 'application/epub+zip' });
       const book = (await makeBook(f)) as FoliateBookLite;
-      console.debug(
-        `${LOG} parsed: getCover=${typeof book.getCover === 'function'}, hasMetadata=${!!book.metadata}`,
-      );
 
       let thumbName: string | undefined;
       let coverUrl: string | null = null;
-      const blob = book.getCover ? await book.getCover() : null;
-      console.debug(
-        `${LOG} cover blob for ${file.basename}: ${blob ? `${blob.size} bytes (${blob.type || 'no type'})` : 'NONE'}`,
-      );
-      if (blob) {
-        const jpeg = await downscaleToJpeg(blob, THUMB_MAX);
-        console.debug(`${LOG} downscaled: ${jpeg ? `${jpeg.byteLength} bytes` : 'FAILED'}`);
-        if (jpeg) {
-          thumbName = `${hash(file.path)}.jpg`;
-          await this.writeThumb(thumbName, jpeg);
-          coverUrl = this.makeUrl(file.path, jpeg);
-          console.debug(`${LOG} wrote thumbnail ${thumbName} for ${file.basename}`);
+      let reason = 'ok'; // why there's no cover, for the summary line
+
+      if (typeof book.getCover !== 'function') {
+        reason = 'book exposes no getCover()';
+      } else {
+        const blob = await book.getCover();
+        if (!blob) {
+          reason = 'getCover() returned null — no embedded cover in the EPUB';
+        } else if (blob.size === 0) {
+          reason = `getCover() returned an empty blob (0 bytes, type="${blob.type || '?'}")`;
+        } else {
+          const jpeg = await downscaleToJpeg(blob, THUMB_MAX);
+          if (!jpeg) {
+            reason = `cover decode/downscale failed (blob ${blob.size} bytes, type="${blob.type || '?'}")`;
+          } else {
+            thumbName = `${hash(file.path)}.jpg`;
+            await this.writeThumb(thumbName, jpeg);
+            coverUrl = this.makeUrl(file.path, jpeg);
+          }
         }
       }
 
       const title = book.metadata ? metaTitle(book.metadata, '') || undefined : undefined;
       const author = book.metadata ? metaAuthor(book.metadata) : undefined;
-      console.log(
-        `${LOG} done: ${file.basename} → cover=${coverUrl ? 'yes' : 'no'}, title=${title ?? '∅'}, author=${author ?? '∅'}`,
-      );
+
+      if (coverUrl) {
+        console.log(`${LOG} ${file.basename}: cover OK (${thumbName})`);
+      } else {
+        console.warn(`${LOG} ${file.basename}: NO COVER — ${reason}`);
+      }
 
       this.index![file.path] = { sig, title, author, thumb: thumbName };
       this.scheduleSave();
