@@ -82,6 +82,20 @@ export class RReaderSettingsTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName('Tap scroll distance')
+      .setDesc('How far a tap or page-turn scrolls, measured in screens (0.25–2.0). Default 0.5.')
+      .addSlider((s) =>
+        s
+          .setLimits(0.25, 2.0, 0.25)
+          .setValue(this.plugin.settings.tapScrollScreens)
+          .setDynamicTooltip()
+          .onChange(async (v) => {
+            this.plugin.settings.tapScrollScreens = v;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
       .setName('Show EPUB files on all devices')
       .setDesc(
         'Enables Obsidian\'s "Detect all file extensions" automatically. Because this plugin setting syncs with your vault, EPUB files show up on every device without changing each device\'s own settings.',

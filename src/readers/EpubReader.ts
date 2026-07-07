@@ -344,7 +344,8 @@ export class EpubReader implements Reader {
 
   navigate(dir: 1 | -1): void {
     if (!this.scrollEl) return;
-    this.scrollEl.scrollBy({ top: dir * this.scrollEl.clientHeight * 0.9, behavior: 'smooth' });
+    const screens = this.settings.tapScrollScreens ?? 0.5;
+    this.scrollEl.scrollBy({ top: dir * this.scrollEl.clientHeight * screens, behavior: 'smooth' });
   }
 
   applySettings(settings: PluginSettings): void {

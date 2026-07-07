@@ -10,6 +10,8 @@ export interface PluginSettings {
   lineHeight: number;
   scrollMode: ScrollMode;
   touchToScroll: boolean;
+  /** How far a tap / page-turn scrolls, in units of one screen height. */
+  tapScrollScreens: number;
   /** On mobile, start with the top/bottom bars hidden (tap center to show). */
   hideBarsOnMobile: boolean;
   /** Apply Obsidian's "detect all file extensions" on load. This plugin
@@ -36,6 +38,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   lineHeight: 1.6,
   scrollMode: 'continuous',
   touchToScroll: true,
+  tapScrollScreens: 0.5,
   hideBarsOnMobile: false,
   detectAllExtensions: true,
   noImageMode: false,
