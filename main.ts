@@ -37,6 +37,12 @@ export default class RReaderPlugin extends Plugin {
     const lastReadData = raw?.lastRead ?? {};
 
     this.settings = Object.assign({}, DEFAULT_SETTINGS, settingsData);
+    // One-time move off the old hard-coded 'dark' default: existing vaults that
+    // never touched the theme now follow the Obsidian theme like the library does.
+    if (!settingsData.themeMigratedToObsidian) {
+      if (this.settings.theme === 'dark') this.settings.theme = 'obsidian';
+      this.settings.themeMigratedToObsidian = true;
+    }
     this.progressManager = new ProgressManager(this);
     this.progressManager.load(progressData, lastReadData);
     this.annotationManager = new AnnotationManager(this);

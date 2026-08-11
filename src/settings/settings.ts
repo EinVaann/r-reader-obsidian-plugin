@@ -1,6 +1,7 @@
 import type { HighlightColor } from '../annotations/types';
 
-export type Theme = 'light' | 'dark' | 'sepia';
+/** 'obsidian' follows the active Obsidian theme (like the library view does). */
+export type Theme = 'obsidian' | 'light' | 'dark' | 'sepia';
 export type ScrollMode = 'paginated' | 'continuous';
 
 export interface PluginSettings {
@@ -29,10 +30,12 @@ export interface PluginSettings {
   libraryGroupByFolder: boolean;
   /** Library section keys (folder paths / "__recent" / "__all") collapsed by the user. */
   libraryCollapsed: string[];
+  /** Set once the old 'dark' default has been migrated to the 'obsidian' theme. */
+  themeMigratedToObsidian: boolean;
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
-  theme: 'dark',
+  theme: 'obsidian',
   fontFamily: 'Georgia, serif',
   fontSize: 18,
   lineHeight: 1.6,
@@ -47,4 +50,5 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   defaultHighlightColor: 'yellow',
   libraryGroupByFolder: true,
   libraryCollapsed: [],
+  themeMigratedToObsidian: true,
 };

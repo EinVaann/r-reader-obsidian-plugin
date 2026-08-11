@@ -17,10 +17,10 @@ export class RReaderSettingsTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('Theme')
-      .setDesc('Reading color scheme')
+      .setDesc('Reading color scheme ("Follow Obsidian" uses the active app theme)')
       .addDropdown((d) =>
         d
-          .addOptions({ light: 'Light', dark: 'Dark', sepia: 'Sepia' })
+          .addOptions({ obsidian: 'Follow Obsidian', light: 'Light', dark: 'Dark', sepia: 'Sepia' })
           .setValue(this.plugin.settings.theme)
           .onChange(async (v) => {
             this.plugin.settings.theme = v as Theme;

@@ -65,6 +65,8 @@ export interface EpubCacheEntry {
 }
 
 const THEME_COLORS: Record<string, { bg: string; fg: string }> = {
+  // Inherit whatever the active Obsidian theme uses, same as the library view.
+  obsidian: { bg: 'var(--background-primary)', fg: 'var(--text-normal)' },
   light: { bg: '#ffffff', fg: '#1a1a1a' },
   dark: { bg: '#1e1e2e', fg: '#cdd6f4' },
   sepia: { bg: '#f4ecd8', fg: '#5b4636' },
@@ -271,7 +273,7 @@ export class EpubReader implements Reader {
   private applyTheme(): void {
     if (!this.scrollEl || !this.styleEl) return;
     const { theme, fontFamily, fontSize, lineHeight } = this.settings;
-    const c = THEME_COLORS[theme] ?? THEME_COLORS.light;
+    const c = THEME_COLORS[theme] ?? THEME_COLORS.obsidian;
 
     this.scrollEl.style.background = c.bg;
     // Tint the reader root too, so safe-area insets blend with the page.

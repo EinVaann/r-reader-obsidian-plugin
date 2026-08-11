@@ -456,7 +456,7 @@ export class ReaderView extends FileView implements ReaderHost {
     // Theme row
     const themeRow = panel.createDiv({ cls: 'rr-qs-row' });
     themeRow.createSpan({ text: 'Theme', cls: 'rr-qs-label' });
-    const themes: Theme[] = ['light', 'dark', 'sepia'];
+    const themes: Theme[] = ['obsidian', 'light', 'dark', 'sepia'];
     for (const t of themes) {
       const btn = themeRow.createEl('button', { cls: 'rr-qs-chip', text: t });
       if (settings.theme === t) btn.addClass('is-active');
