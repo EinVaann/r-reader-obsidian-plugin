@@ -1,15 +1,5 @@
 import type { PluginSettings } from './settings/settings';
 
-export interface ChapterProgress {
-  /** 1-based screen within the chapter. */
-  page: number;
-  pages: number;
-  /** 0..1 through the chapter's scrollable span. */
-  fraction: number;
-  /** Nearest table-of-contents label for the chapter. */
-  label: string;
-}
-
 /** Host hooks the reader uses to report state back to the view chrome. */
 export interface ReaderHost {
   /**
@@ -19,8 +9,10 @@ export interface ReaderHost {
   setProgress(current: number, total: number, fraction: number): void;
   /** Chapter-start positions (0..1 fractions) drawn as dots on the slider. */
   setMilestones(fractions: number[]): void;
-  /** Screen position within the current chapter, for the side rail. */
-  setChapterProgress(p: ChapterProgress): void;
+  /** Nearest table-of-contents label for the text in view. */
+  setChapterLabel(label: string): void;
+  /** Whether there's a previous / next table-of-contents entry to jump to. */
+  setEntryNav(hasPrev: boolean, hasNext: boolean): void;
   /** Toggle the loading overlay while content is being rendered. */
   setLoading(loading: boolean): void;
 }

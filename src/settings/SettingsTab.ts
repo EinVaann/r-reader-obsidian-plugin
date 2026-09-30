@@ -71,7 +71,7 @@ export class RReaderSettingsTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('Progress bar position (mobile)')
-      .setDesc('A full-width bar for the whole book, or a side rail for the current chapter with prev/next chapter buttons. Desktop always uses the bottom bar.')
+      .setDesc('A full-width bar under the page, or a side rail with chapter dots and buttons to jump to the previous / next table-of-contents entry. Desktop always uses the bottom bar.')
       .addDropdown((d) =>
         d
           .addOptions({ bottom: 'Bottom', right: 'Side rail' })

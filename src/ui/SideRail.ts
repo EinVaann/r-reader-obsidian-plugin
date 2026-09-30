@@ -1,52 +1,55 @@
 import { setIcon } from 'obsidian';
-import type { ChapterProgress } from '../types';
 
-/** Above this many screens, dots are thinned to every Nth screen. */
-const MAX_DOTS = 40;
+/** Minimum on-screen spacing between chapter dots; closer ones are dropped. */
+const MIN_DOT_GAP_PX = 9;
 
 export interface SideRailHandlers {
-  /** Scrub to a 0..1 fraction of the current chapter. */
+  /** Scrub to a 0..1 fraction of the whole book. */
   seek: (fraction: number) => void;
-  /** Previous (-1) / next (1) chapter. */
+  /** Previous (-1) / next (1) table-of-contents entry. */
   jump: (dir: 1 | -1) => void;
 }
 
 /**
- * Mobile side rail: chapter-scoped vertical scrubber with page numbers,
- * a dot per screen, and prev/next chapter buttons above and below.
+ * Mobile side rail: whole-book vertical scrubber with page numbers, a dot per
+ * chapter, and prev/next table-of-contents entry buttons above and below.
  */
 export class SideRail {
   readonly el: HTMLElement;
   private pageEl: HTMLElement;
   private pagesEl: HTMLElement;
+  private track: HTMLElement;
   private fill: HTMLElement;
   private thumb: HTMLElement;
   private dotsEl: HTMLElement;
+  private upBtn: HTMLButtonElement;
+  private downBtn: HTMLButtonElement;
   private dots: { fraction: number; el: HTMLElement }[] = [];
-  private pages = 0;
+  private dotFractions: number[] = [];
+  private fraction = 0;
   private dragging = false;
 
   constructor(parent: HTMLElement, private handlers: SideRailHandlers) {
     this.el = parent.createDiv({ cls: 'rr-rail' });
 
-    const up = this.el.createEl('button', { cls: 'rr-rail-btn', attr: { 'aria-label': 'Previous chapter' } });
-    setIcon(up, 'arrow-up-to-line');
-    up.onclick = () => this.handlers.jump(-1);
+    this.upBtn = this.el.createEl('button', { cls: 'rr-rail-btn', attr: { 'aria-label': 'Previous entry' } });
+    setIcon(this.upBtn, 'arrow-up-to-line');
+    this.upBtn.onclick = () => this.handlers.jump(-1);
 
     const panel = this.el.createDiv({ cls: 'rr-rail-panel' });
     this.pageEl = panel.createDiv({ cls: 'rr-rail-num', text: '–' });
-    const track = panel.createDiv({ cls: 'rr-rail-track', attr: { 'aria-label': 'Chapter progress' } });
-    track.createDiv({ cls: 'rr-rail-line' });
-    this.fill = track.createDiv({ cls: 'rr-rail-fill' });
-    this.dotsEl = track.createDiv({ cls: 'rr-rail-dots' });
-    this.thumb = track.createDiv({ cls: 'rr-rail-thumb' });
+    this.track = panel.createDiv({ cls: 'rr-rail-track', attr: { 'aria-label': 'Reading progress' } });
+    this.track.createDiv({ cls: 'rr-rail-line' });
+    this.fill = this.track.createDiv({ cls: 'rr-rail-fill' });
+    this.dotsEl = this.track.createDiv({ cls: 'rr-rail-dots' });
+    this.thumb = this.track.createDiv({ cls: 'rr-rail-thumb' });
     this.pagesEl = panel.createDiv({ cls: 'rr-rail-num', text: '–' });
 
-    const down = this.el.createEl('button', { cls: 'rr-rail-btn', attr: { 'aria-label': 'Next chapter' } });
-    setIcon(down, 'arrow-down-to-line');
-    down.onclick = () => this.handlers.jump(1);
+    this.downBtn = this.el.createEl('button', { cls: 'rr-rail-btn', attr: { 'aria-label': 'Next entry' } });
+    setIcon(this.downBtn, 'arrow-down-to-line');
+    this.downBtn.onclick = () => this.handlers.jump(1);
 
-    this.wireTrack(track);
+    this.wireTrack(this.track);
   }
 
   private wireTrack(track: HTMLElement): void {
@@ -84,29 +87,46 @@ export class SideRail {
     }, { passive: false });
   }
 
-  update(p: ChapterProgress): void {
-    this.pageEl.setText(String(p.page));
-    this.pagesEl.setText(String(p.pages));
-    if (p.pages !== this.pages) this.buildDots(p.pages);
+  /** Current / total screens of the book and the 0..1 position. */
+  update(current: number, total: number, fraction: number): void {
+    this.pageEl.setText(total > 0 ? String(current) : '–');
+    this.pagesEl.setText(total > 0 ? String(total) : '–');
     // Don't fight the finger while dragging.
-    if (!this.dragging) this.setFraction(p.fraction);
+    if (!this.dragging) this.setFraction(fraction);
+    // The track may have had no height when dots were first laid out.
+    if (this.dots.length === 0 && this.dotFractions.length > 0) this.renderDots();
   }
 
-  private buildDots(pages: number): void {
-    this.pages = pages;
+  /** Chapter-start positions (0..1). */
+  setDots(fractions: number[]): void {
+    this.dotFractions = fractions;
+    this.renderDots();
+  }
+
+  setNav(hasPrev: boolean, hasNext: boolean): void {
+    this.upBtn.disabled = !hasPrev;
+    this.downBtn.disabled = !hasNext;
+  }
+
+  private renderDots(): void {
     this.dotsEl.empty();
     this.dots = [];
-    if (pages < 2) return;
-    const step = Math.ceil(pages / MAX_DOTS);
-    for (let i = 0; i < pages; i += step) {
-      const fraction = i / (pages - 1);
+    const h = this.track.clientHeight;
+    if (h <= 0) return;
+    const minGap = MIN_DOT_GAP_PX / h;
+    let last = -Infinity;
+    for (const fraction of this.dotFractions) {
+      if (fraction - last < minGap) continue;
+      last = fraction;
       const el = this.dotsEl.createDiv({ cls: 'rr-rail-dot' });
       el.style.top = `${fraction * 100}%`;
       this.dots.push({ fraction, el });
     }
+    this.setFraction(this.fraction);
   }
 
   private setFraction(f: number): void {
+    this.fraction = f;
     const pct = `${f * 100}%`;
     this.fill.style.height = pct;
     this.thumb.style.top = pct;

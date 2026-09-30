@@ -11,7 +11,7 @@ import type { QuoteAnchor } from './annotations/anchor';
 import { exportBookNotes } from './export/exportNotes';
 import { promptForText } from './ui/PromptModal';
 import { metaAuthor, metaTitle, type BookMeta } from './util/bookMeta';
-import type { ChapterProgress, Reader, ReaderHost } from './types';
+import type { Reader, ReaderHost } from './types';
 import { SideRail } from './ui/SideRail';
 import type { ProgressBarPosition, Theme } from './settings/settings';
 
@@ -86,9 +86,11 @@ export class ReaderView extends FileView implements ReaderHost {
     this.lastFraction = fraction;
     // Don't fight the user while they're dragging the slider.
     if (!this.sliderActive) this.updateSliderVisual(fraction);
+    this.sideRail?.update(current, total, fraction);
   }
 
   setMilestones(fractions: number[]): void {
+    this.sideRail?.setDots(fractions);
     const dots = this.sliderDots;
     if (!dots) return;
     dots.empty();
@@ -100,12 +102,15 @@ export class ReaderView extends FileView implements ReaderHost {
     this.updateSliderVisual(this.lastFraction);
   }
 
-  setChapterProgress(p: ChapterProgress): void {
-    this.sideRail?.update(p);
-    if (this.chapterTitleEl && this.chapterTitleEl.getText() !== p.label) {
-      this.chapterTitleEl.setText(p.label);
-      this.chapterTitleEl.setAttr('title', p.label);
+  setChapterLabel(label: string): void {
+    if (this.chapterTitleEl && this.chapterTitleEl.getText() !== label) {
+      this.chapterTitleEl.setText(label);
+      this.chapterTitleEl.setAttr('title', label);
     }
+  }
+
+  setEntryNav(hasPrev: boolean, hasNext: boolean): void {
+    this.sideRail?.setNav(hasPrev, hasNext);
   }
 
   private positionMilestones(): void {
@@ -160,8 +165,8 @@ export class ReaderView extends FileView implements ReaderHost {
     this.buildBottomBar(root);
     if (Platform.isMobile) {
       this.sideRail = new SideRail(root, {
-        seek: (f) => this.epub?.seekInChapter(f),
-        jump: (dir) => this.epub?.jumpChapter(dir),
+        seek: (f) => this.reader?.seek(f),
+        jump: (dir) => this.epub?.jumpEntry(dir),
       });
     }
     this.applyProgressBarPosition();

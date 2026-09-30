@@ -103,6 +103,8 @@ export class EpubReader implements Reader {
   private chapterEls: HTMLElement[] = [];
   /** Flattened TOC; built once since it's read on every scroll frame. */
   private tocCache: TocEntry[] | null = null;
+  /** Scroll offsets of TOC entries; reset whenever the layout reflows. */
+  private entryPosCache: number[] | null = null;
   /** Current position, kept up to date on scroll and re-applied after reflows. */
   private anchor: ReadingAnchor | null = null;
   /** On-screen top of the scroll viewport when `anchor` was captured. */
@@ -340,6 +342,7 @@ export class EpubReader implements Reader {
           this.restoreAnchor(this.anchor);
         }
       }
+      this.entryPosCache = null;
       this.updateMilestones();
       this.reportProgress();
     });
@@ -524,7 +527,7 @@ export class EpubReader implements Reader {
     const max = el.scrollHeight - el.clientHeight;
     const fraction = max > 0 ? el.scrollTop / max : 0;
     this.host.setProgress(currentScreen, totalScreens, fraction);
-    this.reportChapterProgress();
+    this.reportLocation();
   }
 
   /** Scroll offset of an element's top within the scroll container. */
@@ -553,51 +556,63 @@ export class EpubReader implements Reader {
     return found;
   }
 
-  /** Scroll range [start, end] a chapter spans, where `end` shows its last screen. */
-  private chapterSpan(chapter: HTMLElement): { start: number; end: number; height: number } {
-    const el = this.scrollEl!;
-    const start = this.topInScroll(chapter);
-    const height = chapter.offsetHeight;
-    const maxScroll = el.scrollHeight - el.clientHeight;
-    const end = Math.min(maxScroll, Math.max(start, start + height - el.clientHeight));
-    return { start, end, height };
-  }
-
-  private reportChapterProgress(): void {
+  /** Chapter label for the top bar, plus whether prev/next entries exist. */
+  private reportLocation(): void {
     const el = this.scrollEl;
     const pos = this.currentChapterPos();
     if (!el || pos < 0) return;
-    const { start, end, height } = this.chapterSpan(this.chapterEls[pos]);
-    const pages = Math.max(1, Math.ceil(height / el.clientHeight));
-    const page = Math.min(pages, Math.max(1, Math.floor((el.scrollTop - start) / el.clientHeight) + 1));
-    const fraction = end > start ? Math.max(0, Math.min(1, (el.scrollTop - start) / (end - start))) : 0;
-    const label = this.labelForChapter(Number(this.chapterEls[pos].dataset.index));
-    this.host.setChapterProgress({ page, pages, fraction, label });
+    this.host.setChapterLabel(this.labelForChapter(Number(this.chapterEls[pos].dataset.index)));
+    const { prev, next } = this.neighbourEntries();
+    this.host.setEntryNav(prev !== null, next !== null);
   }
 
-  /** Jump to a 0..1 fraction of the current chapter (side rail). */
-  seekInChapter(fraction: number): void {
-    const el = this.scrollEl;
-    const pos = this.currentChapterPos();
-    if (!el || pos < 0) return;
-    const { start, end } = this.chapterSpan(this.chapterEls[pos]);
-    el.scrollTop = start + Math.max(0, Math.min(1, fraction)) * (end - start);
-  }
-
-  /** Next chapter (1), or start of this / the previous chapter (-1). Skips empty sections. */
-  jumpChapter(dir: 1 | -1): void {
-    const el = this.scrollEl;
-    let pos = this.currentChapterPos();
-    if (!el || pos < 0) return;
-    if (dir === -1 && el.scrollTop - this.topInScroll(this.chapterEls[pos]) > 4) {
-      el.scrollTop = this.topInScroll(this.chapterEls[pos]);
-      return;
+  /**
+   * Scroll offsets of every table-of-contents entry (sorted), or of each
+   * non-empty section when the book has no TOC. Cached until the next reflow.
+   */
+  private entryPositions(): number[] {
+    if (this.entryPosCache) return this.entryPosCache;
+    const out: number[] = [];
+    const toc = this.getToc().filter((e) => e.index >= 0);
+    if (toc.length > 0) {
+      for (const e of toc) {
+        const chapter = this.chapterEl(e.index);
+        if (!chapter) continue;
+        let target: HTMLElement = chapter;
+        if (e.id) {
+          const found = chapter.querySelector<HTMLElement>(`#${CSS.escape(e.id)}`);
+          if (found) target = found;
+        }
+        out.push(Math.round(this.topInScroll(target)));
+      }
+    } else {
+      for (const ch of this.chapterEls) if (ch.offsetHeight >= 1) out.push(Math.round(this.topInScroll(ch)));
     }
-    do {
-      pos += dir;
-    } while (pos >= 0 && pos < this.chapterEls.length && this.chapterEls[pos].offsetHeight < 1);
-    if (pos < 0 || pos >= this.chapterEls.length) return;
-    el.scrollTop = this.topInScroll(this.chapterEls[pos]);
+    this.entryPosCache = [...new Set(out)].sort((a, b) => a - b);
+    return this.entryPosCache;
+  }
+
+  /** The nearest entry positions above and below the viewport top (null if none). */
+  private neighbourEntries(): { prev: number | null; next: number | null } {
+    const el = this.scrollEl!;
+    const top = el.scrollTop;
+    const max = el.scrollHeight - el.clientHeight;
+    let prev: number | null = null;
+    let next: number | null = null;
+    for (const p of this.entryPositions()) {
+      if (p < top - 4) prev = p;
+      else if (p > top + 4 && top < max - 1) { next = p; break; }
+    }
+    return { prev, next };
+  }
+
+  /** Jump to the previous (-1) or next (1) table-of-contents entry. */
+  jumpEntry(dir: 1 | -1): void {
+    const el = this.scrollEl;
+    if (!el) return;
+    const { prev, next } = this.neighbourEntries();
+    const target = dir === 1 ? next : prev;
+    if (target !== null) el.scrollTop = target;
   }
 
   seek(fraction: number): void {
@@ -892,6 +907,7 @@ export class EpubReader implements Reader {
     this.chapterBlockStart.clear();
     this.chapterEls = [];
     this.tocCache = null;
+    this.entryPosCache = null;
     this.anchor = null;
     if (this.scrollEl && this.scrollHandler) {
       this.scrollEl.removeEventListener('scroll', this.scrollHandler);
