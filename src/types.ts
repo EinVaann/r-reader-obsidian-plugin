@@ -7,6 +7,8 @@ export interface ReaderHost {
    * indicator; `fraction` (0..1) drives the progress slider.
    */
   setProgress(current: number, total: number, fraction: number): void;
+  /** Chapter-start positions (0..1 fractions) drawn as dots on the slider. */
+  setMilestones(fractions: number[]): void;
   /** Toggle the loading overlay while content is being rendered. */
   setLoading(loading: boolean): void;
 }

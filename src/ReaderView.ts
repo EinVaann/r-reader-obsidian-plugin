@@ -12,7 +12,7 @@ import { exportBookNotes } from './export/exportNotes';
 import { promptForText } from './ui/PromptModal';
 import { metaAuthor, metaTitle, type BookMeta } from './util/bookMeta';
 import type { Reader, ReaderHost } from './types';
-import type { Theme } from './settings/settings';
+import type { ProgressBarPosition, Theme } from './settings/settings';
 
 /** Curated reading fonts offered in the quick-settings popover. */
 const FONT_OPTIONS: { label: string; value: string }[] = [
@@ -39,10 +39,13 @@ export class ReaderView extends FileView implements ReaderHost {
   private pageIndicator: HTMLElement | null = null;
   private settingsPanel: HTMLElement | null = null;
   private loadingEl: HTMLElement | null = null;
+  private lastFraction = 0;
   private sliderEl: HTMLElement | null = null;
   private sliderFill: HTMLElement | null = null;
   private sliderThumb: HTMLElement | null = null;
   private sliderLabel: HTMLElement | null = null;
+  private sliderDots: HTMLElement | null = null;
+  private milestones: { fraction: number; el: HTMLElement }[] = [];
   private sliderActive = false;
   private chromeHidden = false;
 
@@ -77,14 +80,49 @@ export class ReaderView extends FileView implements ReaderHost {
     const text = total > 0 ? `${current} / ${total}` : '…';
     this.pageIndicator?.setText(text);
     this.sliderLabel?.setText(text);
+    this.lastFraction = fraction;
     // Don't fight the user while they're dragging the slider.
     if (!this.sliderActive) this.updateSliderVisual(fraction);
   }
 
+  setMilestones(fractions: number[]): void {
+    const dots = this.sliderDots;
+    if (!dots) return;
+    dots.empty();
+    this.milestones = fractions.map((fraction) => ({
+      fraction,
+      el: dots.createDiv({ cls: 'rr-slider-dot' }),
+    }));
+    this.positionMilestones();
+    this.updateSliderVisual(this.lastFraction);
+  }
+
+  private positionMilestones(): void {
+    const vertical = this.isVerticalProgress();
+    for (const m of this.milestones) {
+      const pct = `${m.fraction * 100}%`;
+      m.el.style.top = vertical ? pct : '';
+      m.el.style.left = vertical ? '' : pct;
+    }
+  }
+
   private updateSliderVisual(fraction: number): void {
-    const pct = `${Math.max(0, Math.min(1, fraction)) * 100}%`;
-    if (this.sliderFill) this.sliderFill.style.width = pct;
-    if (this.sliderThumb) this.sliderThumb.style.left = pct;
+    const f = Math.max(0, Math.min(1, fraction));
+    const pct = `${f * 100}%`;
+    if (this.isVerticalProgress()) {
+      if (this.sliderFill) { this.sliderFill.style.height = pct; this.sliderFill.style.width = ''; }
+      if (this.sliderThumb) { this.sliderThumb.style.top = pct; this.sliderThumb.style.left = ''; }
+      if (this.sliderLabel) this.sliderLabel.style.top = pct;
+    } else {
+      if (this.sliderFill) { this.sliderFill.style.width = pct; this.sliderFill.style.height = ''; }
+      if (this.sliderThumb) { this.sliderThumb.style.left = pct; this.sliderThumb.style.top = ''; }
+      if (this.sliderLabel) this.sliderLabel.style.top = '';
+    }
+    for (const m of this.milestones) m.el.toggleClass('is-passed', m.fraction <= f);
+  }
+
+  private isVerticalProgress(): boolean {
+    return this.plugin.settings.progressBarPosition === 'right';
   }
 
   setLoading(loading: boolean): void {
@@ -120,6 +158,7 @@ export class ReaderView extends FileView implements ReaderHost {
 
     // Bottom progress bar with a scrub slider (primary navigation on mobile).
     this.buildBottomBar(root);
+    this.applyProgressBarPosition();
 
     const arrayBuffer = await this.app.vault.readBinary(file);
     const ext = file.extension.toLowerCase();
@@ -232,33 +271,39 @@ export class ReaderView extends FileView implements ReaderHost {
     // left:0/right:0 is always full width.
     const slider = bar.createDiv({ cls: 'rr-slider', attr: { 'aria-label': 'Reading progress' } });
     this.sliderEl = slider;
-    slider.createDiv({ cls: 'rr-slider-track' });
-    this.sliderFill = slider.createDiv({ cls: 'rr-slider-fill' });
+    const track = slider.createDiv({ cls: 'rr-slider-track' });
+    this.sliderFill = track.createDiv({ cls: 'rr-slider-fill' });
+    this.sliderDots = track.createDiv({ cls: 'rr-slider-dots' });
     this.sliderThumb = slider.createDiv({ cls: 'rr-slider-thumb' });
 
-    const seekFromX = (clientX: number): void => {
+    const seekFrom = (e: PointerEvent): void => {
       const rect = slider.getBoundingClientRect();
-      const frac = rect.width > 0 ? Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)) : 0;
-      this.updateSliderVisual(frac);
-      this.reader?.seek(frac);
+      const frac = this.isVerticalProgress()
+        ? (rect.height > 0 ? (e.clientY - rect.top) / rect.height : 0)
+        : (rect.width > 0 ? (e.clientX - rect.left) / rect.width : 0);
+      const clamped = Math.max(0, Math.min(1, frac));
+      this.updateSliderVisual(clamped);
+      this.reader?.seek(clamped);
     };
 
     slider.addEventListener('pointerdown', (e: PointerEvent) => {
       this.sliderActive = true;
+      bar.addClass('is-scrubbing');
       slider.setPointerCapture(e.pointerId);
-      seekFromX(e.clientX);
+      seekFrom(e);
       e.preventDefault();
       e.stopPropagation();
     });
     slider.addEventListener('pointermove', (e: PointerEvent) => {
       if (this.sliderActive) {
-        seekFromX(e.clientX);
+        seekFrom(e);
         e.stopPropagation();
       }
     });
     const end = (e: PointerEvent): void => {
       if (!this.sliderActive) return;
       this.sliderActive = false;
+      bar.removeClass('is-scrubbing');
       e.stopPropagation();
       try { slider.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
     };
@@ -484,6 +529,24 @@ export class ReaderView extends FileView implements ReaderHost {
     // Font family row
     this.buildFontRow(panel);
 
+    // Progress bar position row
+    const posRow = panel.createDiv({ cls: 'rr-qs-row' });
+    posRow.createSpan({ text: 'Progress', cls: 'rr-qs-label' });
+    const positions: { value: ProgressBarPosition; label: string }[] = [
+      { value: 'bottom', label: 'bottom' },
+      { value: 'right', label: 'right' },
+    ];
+    for (const p of positions) {
+      const btn = posRow.createEl('button', { cls: 'rr-qs-chip', text: p.label });
+      if (settings.progressBarPosition === p.value) btn.addClass('is-active');
+      btn.onclick = async () => {
+        this.plugin.settings.progressBarPosition = p.value;
+        await this.plugin.saveSettings();
+        posRow.findAll('.rr-qs-chip').forEach((c) => c.removeClass('is-active'));
+        btn.addClass('is-active');
+      };
+    }
+
     // Bookmarks list + add button
     this.buildBookmarksSection(panel);
 
@@ -577,7 +640,19 @@ export class ReaderView extends FileView implements ReaderHost {
   /** Called by the plugin when settings change; updates the open reader live. */
   refreshSettings(): void {
     if (this.rootEl) this.applyCssVars(this.rootEl);
+    this.applyProgressBarPosition();
     this.reader?.applySettings(this.plugin.settings);
+  }
+
+  /** Switch the progress slider between the bottom bar and the right-edge rail. */
+  private applyProgressBarPosition(): void {
+    const vertical = this.isVerticalProgress();
+    this.rootEl?.toggleClass('rr-progress-right', vertical);
+    // Drop the inline sizing from the other orientation before re-applying.
+    if (this.sliderFill) { this.sliderFill.style.width = ''; this.sliderFill.style.height = ''; }
+    if (this.sliderThumb) { this.sliderThumb.style.left = ''; this.sliderThumb.style.top = ''; }
+    this.positionMilestones();
+    this.updateSliderVisual(this.lastFraction);
   }
 
   private teardown(): void {
@@ -606,6 +681,8 @@ export class ReaderView extends FileView implements ReaderHost {
     this.sliderFill = null;
     this.sliderThumb = null;
     this.sliderLabel = null;
+    this.sliderDots = null;
+    this.milestones = [];
     this.sliderActive = false;
     this.chromeHidden = false;
   }

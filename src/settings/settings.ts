@@ -3,6 +3,8 @@ import type { HighlightColor } from '../annotations/types';
 /** 'obsidian' follows the active Obsidian theme (like the library view does). */
 export type Theme = 'obsidian' | 'light' | 'dark' | 'sepia';
 export type ScrollMode = 'paginated' | 'continuous';
+/** Where the reading-progress slider sits: a bottom bar, or a floating right rail. */
+export type ProgressBarPosition = 'bottom' | 'right';
 
 export interface PluginSettings {
   theme: Theme;
@@ -15,6 +17,8 @@ export interface PluginSettings {
   tapScrollScreens: number;
   /** On mobile, start with the top/bottom bars hidden (tap center to show). */
   hideBarsOnMobile: boolean;
+  /** Bottom bar, or a slim vertical bar floating on the right edge. */
+  progressBarPosition: ProgressBarPosition;
   /** Apply Obsidian's "detect all file extensions" on load. This plugin
    *  setting syncs via data.json, so EPUBs show on every device. */
   detectAllExtensions: boolean;
@@ -43,6 +47,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   touchToScroll: true,
   tapScrollScreens: 0.5,
   hideBarsOnMobile: false,
+  progressBarPosition: 'bottom',
   detectAllExtensions: true,
   noImageMode: false,
   closeMenuAfterTocJump: true,

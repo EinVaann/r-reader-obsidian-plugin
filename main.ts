@@ -2,7 +2,7 @@ import { Notice, Plugin, WorkspaceLeaf } from 'obsidian';
 import { READER_VIEW_TYPE, ReaderView } from './src/ReaderView';
 import { RReaderSettingsTab } from './src/settings/SettingsTab';
 import { DEFAULT_SETTINGS, type PluginSettings, type Theme } from './src/settings/settings';
-import { ProgressManager } from './src/reading-progress/ProgressManager';
+import { ProgressManager, type ReadingAnchor } from './src/reading-progress/ProgressManager';
 import { AnnotationManager } from './src/annotations/AnnotationManager';
 import type { BookAnnotations, HighlightColor } from './src/annotations/types';
 import { HIGHLIGHT_COLORS } from './src/annotations/types';
@@ -14,6 +14,7 @@ interface RReaderData {
   settings?: Partial<PluginSettings>;
   progress?: Record<string, string | number>;
   lastRead?: Record<string, number>;
+  anchors?: Record<string, ReadingAnchor>;
   annotations?: Record<string, BookAnnotations>;
 }
 
@@ -44,7 +45,7 @@ export default class RReaderPlugin extends Plugin {
       this.settings.themeMigratedToObsidian = true;
     }
     this.progressManager = new ProgressManager(this);
-    this.progressManager.load(progressData, lastReadData);
+    this.progressManager.load(progressData, lastReadData, raw?.anchors ?? {});
     this.annotationManager = new AnnotationManager(this);
     this.annotationManager.load(raw?.annotations ?? {});
 
@@ -236,6 +237,7 @@ export default class RReaderPlugin extends Plugin {
       settings: this.settings,
       progress: this.progressManager.getAll(),
       lastRead: this.progressManager.getAllLastRead(),
+      anchors: this.progressManager.getAllAnchors(),
       annotations: this.annotationManager.getAll(),
     };
     await this.saveData(data);

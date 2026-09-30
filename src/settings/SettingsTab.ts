@@ -1,6 +1,6 @@
 import { App, Notice, PluginSettingTab, Setting } from 'obsidian';
 import type RReaderPlugin from '../../main';
-import type { Theme, ScrollMode } from './settings';
+import type { Theme, ScrollMode, ProgressBarPosition } from './settings';
 import type { HighlightColor } from '../annotations/types';
 
 export class RReaderSettingsTab extends PluginSettingTab {
@@ -65,6 +65,19 @@ export class RReaderSettingsTab extends PluginSettingTab {
           .setValue(this.plugin.settings.scrollMode)
           .onChange(async (v) => {
             this.plugin.settings.scrollMode = v as ScrollMode;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Progress bar position')
+      .setDesc('A full-width bar under the page, or a slim vertical bar floating on the right edge. Either one hides with the rest of the chrome.')
+      .addDropdown((d) =>
+        d
+          .addOptions({ bottom: 'Bottom', right: 'Right edge' })
+          .setValue(this.plugin.settings.progressBarPosition)
+          .onChange(async (v) => {
+            this.plugin.settings.progressBarPosition = v as ProgressBarPosition;
             await this.plugin.saveSettings();
           }),
       );

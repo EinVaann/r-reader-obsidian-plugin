@@ -1,5 +1,5 @@
 import type { PluginSettings } from '../settings/settings';
-import type { ProgressManager } from '../reading-progress/ProgressManager';
+import type { ProgressManager, ReadingAnchor } from '../reading-progress/ProgressManager';
 import type { Reader, ReaderHost } from '../types';
 import type { Highlight, HighlightColor } from '../annotations/types';
 import { captureSelection, findRange, snippet, unwrapById, wrapRange, type QuoteAnchor } from '../annotations/anchor';
@@ -72,6 +72,14 @@ const THEME_COLORS: Record<string, { bg: string; fg: string }> = {
   sepia: { bg: '#f4ecd8', fg: '#5b4636' },
 };
 
+/** Elements used as reading-position anchors (stable across reflows). */
+const BLOCK_SELECTOR =
+  'p, h1, h2, h3, h4, h5, h6, li, blockquote, pre, figure, table, img, .rr-img-placeholder';
+/** Save progress once scrolling has been idle this long. */
+const SAVE_DEBOUNCE_MS = 1000;
+/** Chapter dots closer than this (as a fraction of the bar) are merged. */
+const MIN_MILESTONE_GAP = 0.012;
+
 export class EpubReader implements Reader {
   private container: HTMLElement;
   private filePath: string;
@@ -85,6 +93,19 @@ export class EpubReader implements Reader {
   private contentEl: HTMLElement | null = null;
   private styleEl: HTMLStyleElement | null = null;
   private scrollHandler: (() => void) | null = null;
+  private saveTimer: number | null = null;
+  private resizeObserver: ResizeObserver | null = null;
+  /** Block elements in document order, with their chapter and in-chapter index. */
+  private blocks: { el: HTMLElement; chapter: number; index: number }[] = [];
+  /** First index into `blocks` for each chapter. */
+  private chapterBlockStart = new Map<number, number>();
+  /** Current position, kept up to date on scroll and re-applied after reflows. */
+  private anchor: ReadingAnchor | null = null;
+  /** scrollTop we set ourselves when restoring, so the echo scroll doesn't re-capture. */
+  private restoredTop: number | null = null;
+  private milestoneKey = '';
+  /** True once the loading overlay is gone and the reader is interactive. */
+  private revealed = false;
   private objectUrls: string[] = [];
   private destroyed = false;
 
@@ -141,54 +162,165 @@ export class EpubReader implements Reader {
     this.contentEl.addEventListener('click', this.handleContentClick);
     this.applyTheme();
 
+    const savedAnchor = this.progress.getAnchor(this.filePath);
+    const savedFraction = this.progress.get(this.filePath);
+
     // Cache check — skip the slow render loop if we have a fresh entry.
     const cached = this.cache?.get(this.filePath);
     if (cached && cached.mtime === this.mtime) {
       // Cache hit: inject the pre-rendered (clean, highlight-free) HTML.
       this.contentEl.innerHTML = cached.html;
+      this.contentEl.querySelectorAll<HTMLElement>('.rr-chapter').forEach((ch) => this.prepareChapter(ch));
+      this.reveal(savedAnchor, savedFraction);
     } else {
       // Cache miss (or stale): render every section and then store the result.
       if (cached) this.cache?.delete(this.filePath); // remove stale entry
+      // Reveal once the chapter being read is in the DOM; later chapters append
+      // below it, so the position never jumps. A bare fraction needs the whole book.
+      const revealAt = savedAnchor
+        ? Math.min(savedAnchor.chapter, this.sections.length - 1)
+        : typeof savedFraction === 'number' && savedFraction > 0 ? this.sections.length - 1 : 0;
+      const cleanHtml: string[] = [];
 
       for (let i = 0; i < this.sections.length; i++) {
         if (this.destroyed) return;
-        await this.renderSection(i);
-        // Surface load progress in the page indicator while building.
-        this.host.setProgress(i + 1, this.sections.length, (i + 1) / this.sections.length);
-        // Reveal the reader as soon as the first chapter is in the DOM, then keep
-        // building the rest in the background, yielding so scroll/taps stay live.
-        if (i === 0) this.host.setLoading(false);
+        const chapter = await this.renderSection(i);
+        // Snapshot before highlights so the cache never holds highlight spans.
+        cleanHtml.push(chapter.outerHTML);
+        this.prepareChapter(chapter);
+        if (!this.revealed) {
+          // Loading progress, shown behind the overlay until reveal.
+          this.host.setProgress(i + 1, this.sections.length, (i + 1) / this.sections.length);
+          if (i >= revealAt) this.reveal(savedAnchor, savedFraction);
+        }
         await this.yieldToEventLoop();
       }
       if (this.destroyed) return;
 
-      // Store the CLEAN html (before highlights are applied) so editing a
-      // highlight never bakes stale highlight spans into the cache. Transfer
-      // objectUrl ownership to the cache so destroy() won't revoke them.
+      // Transfer objectUrl ownership to the cache so destroy() won't revoke them.
       if (this.cache) {
         this.cache.set(this.filePath, {
-          html: this.contentEl.innerHTML,
+          html: cleanHtml.join(''),
           mtime: this.mtime,
           objectUrls: [...this.objectUrls],
         });
         this.objectUrls = []; // cache owns them now
       }
+      this.reveal(savedAnchor, savedFraction);
     }
-    if (this.destroyed) return;
-
-    this.setupScrollTracking();
-    this.host.setLoading(false);
-
-    // Apply saved highlights over the clean HTML (live pass, never cached).
-    this.applyHighlights(this.initialHighlights);
-
-    // Restore saved position (stored as a 0..1 fraction of total scroll).
-    const saved = this.progress.get(this.filePath);
-    if (typeof saved === 'number' && saved > 0) {
-      const max = scroll.scrollHeight - scroll.clientHeight;
-      scroll.scrollTop = saved * max;
-    }
+    this.updateMilestones();
     this.reportProgress();
+  }
+
+  /** Jump to the saved position, then drop the loading overlay (once). */
+  private reveal(savedAnchor: ReadingAnchor | null, savedFraction: string | number | null): void {
+    const scroll = this.scrollEl;
+    if (this.revealed || !scroll) return;
+    this.revealed = true;
+    if (savedAnchor && this.restoreAnchor(savedAnchor)) {
+      this.anchor = savedAnchor;
+    } else {
+      if (typeof savedFraction === 'number' && savedFraction > 0) {
+        const max = scroll.scrollHeight - scroll.clientHeight;
+        scroll.scrollTop = savedFraction * max;
+      }
+      this.anchor = this.captureAnchor();
+    }
+    this.setupScrollTracking();
+    this.setupResizeTracking();
+    this.host.setLoading(false);
+    this.updateMilestones();
+    this.reportProgress();
+  }
+
+  /** Apply this chapter's saved highlights and index its anchorable blocks. */
+  private prepareChapter(chapter: HTMLElement): void {
+    const ci = Number(chapter.dataset.index);
+    this.applyHighlights(this.initialHighlights.filter((h) => h.chapterIndex === ci));
+    this.chapterBlockStart.set(ci, this.blocks.length);
+    const els = chapter.querySelectorAll<HTMLElement>(BLOCK_SELECTOR);
+    els.forEach((el, index) => this.blocks.push({ el, chapter: ci, index }));
+  }
+
+  /** The block at the top of the viewport and how far into it we've scrolled. */
+  private captureAnchor(): ReadingAnchor | null {
+    const el = this.scrollEl;
+    if (!el || this.blocks.length === 0) return null;
+    const viewTop = el.getBoundingClientRect().top;
+    // Binary search: last block whose top is at/above the viewport top.
+    let lo = 0;
+    let hi = this.blocks.length - 1;
+    let found = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (this.blocks[mid].el.getBoundingClientRect().top <= viewTop + 1) {
+        found = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    if (found < 0) return null;
+    const b = this.blocks[found];
+    const rect = b.el.getBoundingClientRect();
+    const offset = rect.height > 0 ? Math.max(0, Math.min(1, (viewTop - rect.top) / rect.height)) : 0;
+    return { chapter: b.chapter, block: b.index, offset };
+  }
+
+  /** Scroll so the anchored block sits at the viewport top. False if it can't be found. */
+  private restoreAnchor(a: ReadingAnchor): boolean {
+    const el = this.scrollEl;
+    const start = this.chapterBlockStart.get(a.chapter);
+    if (!el || start === undefined) return false;
+    const b = this.blocks[start + a.block];
+    if (!b || b.chapter !== a.chapter) return false;
+    const rect = b.el.getBoundingClientRect();
+    const target = Math.round(
+      el.scrollTop + rect.top - el.getBoundingClientRect().top + a.offset * rect.height,
+    );
+    if (Math.abs(el.scrollTop - target) > 1) {
+      el.scrollTop = target;
+      this.restoredTop = el.scrollTop;
+    }
+    return true;
+  }
+
+  /** Keep the reading position fixed when the layout changes (fullscreen, font, resize). */
+  private setupResizeTracking(): void {
+    if (!this.scrollEl || !this.contentEl) return;
+    this.resizeObserver = new ResizeObserver(() => {
+      if (this.anchor) this.restoreAnchor(this.anchor);
+      this.updateMilestones();
+      this.reportProgress();
+    });
+    this.resizeObserver.observe(this.scrollEl);
+    this.resizeObserver.observe(this.contentEl);
+  }
+
+  /** Report chapter-start fractions to the host for the slider dots. */
+  private updateMilestones(): void {
+    const el = this.scrollEl;
+    if (!el || !this.contentEl) return;
+    const max = el.scrollHeight - el.clientHeight;
+    if (max <= 0) return;
+    const topLevel = this.getToc().filter((e) => e.depth === 0 && e.index >= 0).map((e) => e.index);
+    const indices = topLevel.length > 0
+      ? [...new Set(topLevel)].sort((a, b) => a - b)
+      : this.sections.map((_, i) => i);
+    const viewTop = el.getBoundingClientRect().top - el.scrollTop;
+    const out: number[] = [];
+    for (const i of indices) {
+      const chapter = this.chapterEl(i);
+      if (!chapter) continue;
+      const f = Math.min(1, (chapter.getBoundingClientRect().top - viewTop) / max);
+      if (f <= 0.001) continue;
+      if (out.length > 0 && f - out[out.length - 1] < MIN_MILESTONE_GAP) continue;
+      out.push(f);
+    }
+    const key = out.map((f) => f.toFixed(4)).join(',');
+    if (key === this.milestoneKey) return;
+    this.milestoneKey = key;
+    this.host.setMilestones(out);
   }
 
   /** Yield a frame so the WebView can paint/scroll between chapter renders. */
@@ -196,7 +328,7 @@ export class EpubReader implements Reader {
     return new Promise((resolve) => requestAnimationFrame(() => resolve()));
   }
 
-  private async renderSection(index: number): Promise<void> {
+  private async renderSection(index: number): Promise<HTMLElement> {
     const section = this.sections[index];
     const chapter = this.contentEl!.createDiv({ cls: 'rr-chapter' });
     chapter.dataset.index = String(index);
@@ -220,6 +352,7 @@ export class EpubReader implements Reader {
     } catch (e) {
       console.error(`R Reader: failed to render section ${index}`, e);
     }
+    return chapter;
   }
 
   /** Replace images with a text placeholder (no-image mode). */
@@ -280,6 +413,7 @@ export class EpubReader implements Reader {
     const root = this.container.closest('.rr-reader-root');
     if (root instanceof HTMLElement) root.style.background = c.bg;
     this.styleEl.textContent = `
+      .rr-epub-scroll { overflow-anchor: none; }
       .rr-epub-content {
         color: ${c.fg};
         background: ${c.bg};
@@ -312,11 +446,24 @@ export class EpubReader implements Reader {
       ticking = true;
       requestAnimationFrame(() => {
         ticking = false;
+        if (!this.scrollEl) return;
+        // Skip the echo of our own restore so rounding can't drift the anchor.
+        const isEcho = this.restoredTop !== null && Math.abs(this.scrollEl.scrollTop - this.restoredTop) <= 1;
+        this.restoredTop = null;
+        if (!isEcho) this.anchor = this.captureAnchor();
         this.reportProgress();
-        this.saveProgress();
+        this.scheduleSave();
       });
     };
     el.addEventListener('scroll', this.scrollHandler, { passive: true });
+  }
+
+  private scheduleSave(): void {
+    if (this.saveTimer !== null) window.clearTimeout(this.saveTimer);
+    this.saveTimer = window.setTimeout(() => {
+      this.saveTimer = null;
+      this.saveProgress();
+    }, SAVE_DEBOUNCE_MS);
   }
 
   private reportProgress(): void {
@@ -341,7 +488,7 @@ export class EpubReader implements Reader {
     if (!el) return;
     const max = el.scrollHeight - el.clientHeight;
     const fraction = max > 0 ? el.scrollTop / max : 0;
-    this.progress.save(this.filePath, fraction);
+    void this.progress.save(this.filePath, fraction, this.anchor);
   }
 
   navigate(dir: 1 | -1): void {
@@ -607,6 +754,17 @@ export class EpubReader implements Reader {
 
   destroy(): void {
     this.destroyed = true;
+    // Flush a pending debounced save before the scroll element goes away.
+    if (this.saveTimer !== null) {
+      window.clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+      this.saveProgress();
+    }
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = null;
+    this.blocks = [];
+    this.chapterBlockStart.clear();
+    this.anchor = null;
     if (this.scrollEl && this.scrollHandler) {
       this.scrollEl.removeEventListener('scroll', this.scrollHandler);
     }
