@@ -194,11 +194,6 @@
   border-radius: 8px 8px 0 0;
   background: var(--interactive-accent);
 }
-/* Keep the text out from under the rail. */
-.rr-reader-root.rr-progress-right .rr-epub-content {
-  padding-right: 52px;
-}
-
 /* ---- Immersive: hide top/bottom chrome ---- */
 .rr-chrome-hidden .rr-topbar,
 .rr-chrome-hidden .rr-bottombar,

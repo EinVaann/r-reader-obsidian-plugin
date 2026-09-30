@@ -105,6 +105,10 @@ export class EpubReader implements Reader {
   private tocCache: TocEntry[] | null = null;
   /** Current position, kept up to date on scroll and re-applied after reflows. */
   private anchor: ReadingAnchor | null = null;
+  /** On-screen top of the scroll viewport when `anchor` was captured. */
+  private anchorViewTop: number | null = null;
+  /** Temporary top margin (px) that keeps text still when there's no room to scroll up. */
+  private topSlack = 0;
   /** scrollTop we set ourselves when restoring, so the echo scroll doesn't re-capture. */
   private restoredTop: number | null = null;
   private milestoneKey = '';
@@ -223,6 +227,7 @@ export class EpubReader implements Reader {
     this.revealed = true;
     if (savedAnchor && this.restoreAnchor(savedAnchor)) {
       this.anchor = savedAnchor;
+      this.anchorViewTop = scroll.getBoundingClientRect().top;
     } else {
       if (typeof savedFraction === 'number' && savedFraction > 0) {
         const max = scroll.scrollHeight - scroll.clientHeight;
@@ -265,36 +270,76 @@ export class EpubReader implements Reader {
         hi = mid - 1;
       }
     }
-    if (found < 0) return null;
-    const b = this.blocks[found];
+    this.anchorViewTop = viewTop;
+    // Above the first block (top of the book): anchor to it with a negative offset.
+    const b = this.blocks[Math.max(0, found)];
     const rect = b.el.getBoundingClientRect();
-    const offset = rect.height > 0 ? Math.max(0, Math.min(1, (viewTop - rect.top) / rect.height)) : 0;
+    const raw = rect.height > 0 ? (viewTop - rect.top) / rect.height : 0;
+    const offset = found < 0 ? Math.min(0, raw) : Math.max(0, Math.min(1, raw));
     return { chapter: b.chapter, block: b.index, offset };
+  }
+
+  /** scrollTop that puts the anchored block at the viewport top, or null if it's gone. */
+  private anchorTarget(a: ReadingAnchor): number | null {
+    const el = this.scrollEl;
+    const start = this.chapterBlockStart.get(a.chapter);
+    if (!el || start === undefined) return null;
+    const b = this.blocks[start + a.block];
+    if (!b || b.chapter !== a.chapter) return null;
+    const rect = b.el.getBoundingClientRect();
+    return el.scrollTop + rect.top - el.getBoundingClientRect().top + a.offset * rect.height;
   }
 
   /** Scroll so the anchored block sits at the viewport top. False if it can't be found. */
   private restoreAnchor(a: ReadingAnchor): boolean {
-    const el = this.scrollEl;
-    const start = this.chapterBlockStart.get(a.chapter);
-    if (!el || start === undefined) return false;
-    const b = this.blocks[start + a.block];
-    if (!b || b.chapter !== a.chapter) return false;
-    const rect = b.el.getBoundingClientRect();
-    const target = Math.round(
-      el.scrollTop + rect.top - el.getBoundingClientRect().top + a.offset * rect.height,
-    );
-    if (Math.abs(el.scrollTop - target) > 1) {
-      el.scrollTop = target;
+    const target = this.anchorTarget(a);
+    if (target === null) return false;
+    this.setScrollTop(target);
+    return true;
+  }
+
+  private setScrollTop(target: number): void {
+    const el = this.scrollEl!;
+    const t = Math.round(target);
+    if (Math.abs(el.scrollTop - t) > 1) {
+      el.scrollTop = t;
       this.restoredTop = el.scrollTop;
     }
-    return true;
+  }
+
+  /**
+   * Restore the anchor while following a viewport that moved on screen by `shift`
+   * px, so text stays put visually. Near the top of the book there's nothing to
+   * scroll back into, so a temporary top margin makes up the difference.
+   */
+  private restoreWithShift(a: ReadingAnchor, shift: number): void {
+    const base = this.anchorTarget(a);
+    if (base === null || !this.contentEl) return;
+    const logical = base + shift - this.topSlack;
+    const slack = Math.max(0, Math.round(-logical));
+    if (slack !== this.topSlack) {
+      this.topSlack = slack;
+      this.contentEl.style.marginTop = slack > 0 ? `${slack}px` : '';
+    }
+    this.setScrollTop(logical + slack);
   }
 
   /** Keep the reading position fixed when the layout changes (fullscreen, font, resize). */
   private setupResizeTracking(): void {
     if (!this.scrollEl || !this.contentEl) return;
     this.resizeObserver = new ResizeObserver(() => {
-      if (this.anchor) this.restoreAnchor(this.anchor);
+      if (this.anchor && this.scrollEl) {
+        // If the viewport itself moved on screen (fullscreen toggle), follow it
+        // so the text stays put visually, then re-anchor to the new viewport.
+        const viewTop = this.scrollEl.getBoundingClientRect().top;
+        const shift = this.anchorViewTop !== null ? viewTop - this.anchorViewTop : 0;
+        if (Math.abs(shift) > 0.5) {
+          this.restoreWithShift(this.anchor, shift);
+          this.anchor = this.captureAnchor();
+        } else {
+          this.restoreAnchor(this.anchor);
+        }
+      }
       this.updateMilestones();
       this.reportProgress();
     });
