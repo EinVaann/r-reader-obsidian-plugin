@@ -15,6 +15,8 @@ export interface PluginSettings {
   touchToScroll: boolean;
   /** How far a tap / page-turn scrolls, in units of one screen height. */
   tapScrollScreens: number;
+  /** Duration (ms) of the tap / page-turn scroll animation; 0 = instant. */
+  tapScrollDuration: number;
   /** On mobile, start with the top/bottom bars hidden (tap center to show). */
   hideBarsOnMobile: boolean;
   /** Bottom bar, or a slim vertical bar floating on the right edge. */
@@ -48,6 +50,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   scrollMode: 'continuous',
   touchToScroll: true,
   tapScrollScreens: 0.5,
+  tapScrollDuration: 250,
   hideBarsOnMobile: false,
   progressBarPosition: 'right',
   detectAllExtensions: true,

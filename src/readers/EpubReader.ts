@@ -111,6 +111,8 @@ export class EpubReader implements Reader {
   private anchorViewTop: number | null = null;
   /** Temporary top margin (px) that keeps text still when there's no room to scroll up. */
   private topSlack = 0;
+  /** Running tap-scroll animation, if any. */
+  private tapAnim: { to: number; frame: number } | null = null;
   /** scrollTop we set ourselves when restoring, so the echo scroll doesn't re-capture. */
   private restoredTop: number | null = null;
   private milestoneKey = '';
@@ -509,6 +511,9 @@ export class EpubReader implements Reader {
       });
     };
     el.addEventListener('scroll', this.scrollHandler, { passive: true });
+    // A drag or wheel takes over from a running tap scroll (a tap still chains).
+    el.addEventListener('touchmove', this.cancelTapAnim, { passive: true });
+    el.addEventListener('wheel', this.cancelTapAnim, { passive: true });
   }
 
   private scheduleSave(): void {
@@ -631,10 +636,44 @@ export class EpubReader implements Reader {
   }
 
   navigate(dir: 1 | -1): void {
-    if (!this.scrollEl) return;
+    const el = this.scrollEl;
+    if (!el) return;
     const screens = this.settings.tapScrollScreens ?? 0.5;
-    this.scrollEl.scrollBy({ top: dir * this.scrollEl.clientHeight * screens, behavior: 'smooth' });
+    // Chain rapid taps from where the running animation is headed.
+    const from = this.tapAnim ? this.tapAnim.to : el.scrollTop;
+    const max = el.scrollHeight - el.clientHeight;
+    const to = Math.max(0, Math.min(max, from + dir * el.clientHeight * screens));
+    this.animateScrollTo(to, this.settings.tapScrollDuration ?? 250);
   }
+
+  /** Ease-out scroll to `to` over `ms`; cancelled by the user touching or wheeling. */
+  private animateScrollTo(to: number, ms: number): void {
+    const el = this.scrollEl;
+    if (!el) return;
+    this.cancelTapAnim();
+    if (ms <= 0) {
+      el.scrollTop = to;
+      return;
+    }
+    const from = el.scrollTop;
+    const start = performance.now();
+    const anim = { to, frame: 0 };
+    const step = (now: number): void => {
+      const t = Math.min(1, (now - start) / ms);
+      const eased = 1 - Math.pow(1 - t, 3);
+      el.scrollTop = from + (to - from) * eased;
+      if (t < 1 && this.tapAnim === anim) anim.frame = requestAnimationFrame(step);
+      else if (this.tapAnim === anim) this.tapAnim = null;
+    };
+    this.tapAnim = anim;
+    anim.frame = requestAnimationFrame(step);
+  }
+
+  private cancelTapAnim = (): void => {
+    if (!this.tapAnim) return;
+    cancelAnimationFrame(this.tapAnim.frame);
+    this.tapAnim = null;
+  };
 
   applySettings(settings: PluginSettings): void {
     this.settings = settings;
@@ -901,6 +940,9 @@ export class EpubReader implements Reader {
       this.saveTimer = null;
       this.saveProgress();
     }
+    this.cancelTapAnim();
+    this.scrollEl?.removeEventListener('touchmove', this.cancelTapAnim);
+    this.scrollEl?.removeEventListener('wheel', this.cancelTapAnim);
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     this.blocks = [];

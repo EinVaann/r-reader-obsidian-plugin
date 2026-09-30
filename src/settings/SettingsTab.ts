@@ -109,6 +109,20 @@ export class RReaderSettingsTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName('Tap scroll speed')
+      .setDesc('How long a tap or page-turn scroll takes, in milliseconds. 0 jumps instantly; lower is faster. Default 250.')
+      .addSlider((s) =>
+        s
+          .setLimits(0, 800, 50)
+          .setValue(this.plugin.settings.tapScrollDuration)
+          .setDynamicTooltip()
+          .onChange(async (v) => {
+            this.plugin.settings.tapScrollDuration = v;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
       .setName('Show EPUB files on all devices')
       .setDesc(
         'Enables Obsidian\'s "Detect all file extensions" automatically. Because this plugin setting syncs with your vault, EPUB files show up on every device without changing each device\'s own settings.',
