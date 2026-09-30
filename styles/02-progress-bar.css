@@ -199,10 +199,44 @@
   background: var(--interactive-accent);
 }
 /* ---- Immersive: hide top/bottom chrome ---- */
-.rr-chrome-hidden .rr-topbar,
-.rr-chrome-hidden .rr-bottombar,
+/* Desktop bars sit in the layout flow, so they just disappear. */
+.rr-reader-root:not(.rr-mobile).rr-chrome-hidden .rr-topbar,
+.rr-reader-root:not(.rr-mobile).rr-chrome-hidden .rr-bottombar {
+  display: none;
+}
+/* Mobile bars float, so they slide off their edge and fade. */
+.rr-mobile .rr-topbar,
+.rr-mobile .rr-bottombar,
+.rr-rail {
+  transition:
+    transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 0.24s ease;
+}
+.rr-mobile.rr-chrome-hidden .rr-topbar,
+.rr-mobile.rr-chrome-hidden .rr-bottombar,
 .rr-chrome-hidden .rr-rail {
-  display: none !important;
+  opacity: 0;
+  pointer-events: none;
+}
+.rr-mobile.rr-chrome-hidden .rr-topbar {
+  transform: translateY(-110%);
+}
+.rr-mobile.rr-chrome-hidden .rr-bottombar {
+  transform: translateY(calc(100% + var(--rr-navbar-h, 0px) + 24px));
+}
+.rr-chrome-hidden .rr-rail {
+  transform: translateX(calc(100% + 24px));
+}
+/* Rail trails the bars slightly on the way back in. */
+.rr-reader-root:not(.rr-chrome-hidden) .rr-rail {
+  transition-delay: 0.05s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rr-mobile .rr-topbar,
+  .rr-mobile .rr-bottombar,
+  .rr-rail {
+    transition: none;
+  }
 }
 
 /* Hide Obsidian's own mobile chrome for a full-screen read. */
