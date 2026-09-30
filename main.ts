@@ -44,6 +44,11 @@ export default class RReaderPlugin extends Plugin {
       if (this.settings.theme === 'dark') this.settings.theme = 'obsidian';
       this.settings.themeMigratedToObsidian = true;
     }
+    // One-time switch of existing installs to the side progress rail.
+    if (!settingsData.progressMigratedToRight) {
+      this.settings.progressBarPosition = 'right';
+      this.settings.progressMigratedToRight = true;
+    }
     this.progressManager = new ProgressManager(this);
     this.progressManager.load(progressData, lastReadData, raw?.anchors ?? {});
     this.annotationManager = new AnnotationManager(this);

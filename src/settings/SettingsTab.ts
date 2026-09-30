@@ -70,11 +70,11 @@ export class RReaderSettingsTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Progress bar position')
-      .setDesc('A full-width bar under the page, or a slim vertical bar floating on the right edge. Either one hides with the rest of the chrome.')
+      .setName('Progress bar position (mobile)')
+      .setDesc('A full-width bar for the whole book, or a side rail for the current chapter with prev/next chapter buttons. Desktop always uses the bottom bar.')
       .addDropdown((d) =>
         d
-          .addOptions({ bottom: 'Bottom', right: 'Right edge' })
+          .addOptions({ bottom: 'Bottom', right: 'Side rail' })
           .setValue(this.plugin.settings.progressBarPosition)
           .onChange(async (v) => {
             this.plugin.settings.progressBarPosition = v as ProgressBarPosition;

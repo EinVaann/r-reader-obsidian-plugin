@@ -22,21 +22,31 @@
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 18px 10px;
+  gap: 4px;
+  padding: 6px 12px;
   border-bottom: 1px solid var(--background-modifier-border);
-  background: var(--background-secondary);
+  background: var(--background-primary);
+  font-family: var(--font-interface);
 }
 
-/* Page counter lives in the bottom slider now; hidden in the top bar. */
+/* Percent read, between prev/next (desktop; mobile shows it in the slider). */
 .rr-page-indicator {
-  display: none;
+  min-width: 3.2em;
+  text-align: center;
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
+/* Current chapter title; truncates instead of pushing the buttons. */
 .rr-topbar-title {
   flex: 1 1 auto;
-  font-size: 12px;
-  font-family: var(--font-interface);
-  color: var(--text-muted);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--font-ui-small);
+  font-weight: var(--font-medium, 500);
+  color: var(--text-normal);
 }
 
 .rr-iconbtn {

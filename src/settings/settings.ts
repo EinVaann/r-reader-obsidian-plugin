@@ -36,6 +36,8 @@ export interface PluginSettings {
   libraryCollapsed: string[];
   /** Set once the old 'dark' default has been migrated to the 'obsidian' theme. */
   themeMigratedToObsidian: boolean;
+  /** Set once the progress bar has been moved to the side rail by default. */
+  progressMigratedToRight: boolean;
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -47,7 +49,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   touchToScroll: true,
   tapScrollScreens: 0.5,
   hideBarsOnMobile: false,
-  progressBarPosition: 'bottom',
+  progressBarPosition: 'right',
   detectAllExtensions: true,
   noImageMode: false,
   closeMenuAfterTocJump: true,
@@ -56,4 +58,5 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   libraryGroupByFolder: true,
   libraryCollapsed: [],
   themeMigratedToObsidian: true,
+  progressMigratedToRight: true,
 };

@@ -11,7 +11,8 @@ import type { QuoteAnchor } from './annotations/anchor';
 import { exportBookNotes } from './export/exportNotes';
 import { promptForText } from './ui/PromptModal';
 import { metaAuthor, metaTitle, type BookMeta } from './util/bookMeta';
-import type { Reader, ReaderHost } from './types';
+import type { ChapterProgress, Reader, ReaderHost } from './types';
+import { SideRail } from './ui/SideRail';
 import type { ProgressBarPosition, Theme } from './settings/settings';
 
 /** Curated reading fonts offered in the quick-settings popover. */
@@ -46,6 +47,8 @@ export class ReaderView extends FileView implements ReaderHost {
   private sliderLabel: HTMLElement | null = null;
   private sliderDots: HTMLElement | null = null;
   private milestones: { fraction: number; el: HTMLElement }[] = [];
+  private sideRail: SideRail | null = null;
+  private chapterTitleEl: HTMLElement | null = null;
   private sliderActive = false;
   private chromeHidden = false;
 
@@ -78,7 +81,7 @@ export class ReaderView extends FileView implements ReaderHost {
   // --- ReaderHost ---
   setProgress(current: number, total: number, fraction: number): void {
     const text = total > 0 ? `${current} / ${total}` : '…';
-    this.pageIndicator?.setText(text);
+    this.pageIndicator?.setText(total > 0 ? `${Math.round(fraction * 100)}%` : '');
     this.sliderLabel?.setText(text);
     this.lastFraction = fraction;
     // Don't fight the user while they're dragging the slider.
@@ -97,32 +100,29 @@ export class ReaderView extends FileView implements ReaderHost {
     this.updateSliderVisual(this.lastFraction);
   }
 
-  private positionMilestones(): void {
-    const vertical = this.isVerticalProgress();
-    for (const m of this.milestones) {
-      const pct = `${m.fraction * 100}%`;
-      m.el.style.top = vertical ? pct : '';
-      m.el.style.left = vertical ? '' : pct;
+  setChapterProgress(p: ChapterProgress): void {
+    this.sideRail?.update(p);
+    if (this.chapterTitleEl && this.chapterTitleEl.getText() !== p.label) {
+      this.chapterTitleEl.setText(p.label);
+      this.chapterTitleEl.setAttr('title', p.label);
     }
+  }
+
+  private positionMilestones(): void {
+    for (const m of this.milestones) m.el.style.left = `${m.fraction * 100}%`;
   }
 
   private updateSliderVisual(fraction: number): void {
     const f = Math.max(0, Math.min(1, fraction));
     const pct = `${f * 100}%`;
-    if (this.isVerticalProgress()) {
-      if (this.sliderFill) { this.sliderFill.style.height = pct; this.sliderFill.style.width = ''; }
-      if (this.sliderThumb) { this.sliderThumb.style.top = pct; this.sliderThumb.style.left = ''; }
-      if (this.sliderLabel) this.sliderLabel.style.top = pct;
-    } else {
-      if (this.sliderFill) { this.sliderFill.style.width = pct; this.sliderFill.style.height = ''; }
-      if (this.sliderThumb) { this.sliderThumb.style.left = pct; this.sliderThumb.style.top = ''; }
-      if (this.sliderLabel) this.sliderLabel.style.top = '';
-    }
+    if (this.sliderFill) this.sliderFill.style.width = pct;
+    if (this.sliderThumb) this.sliderThumb.style.left = pct;
     for (const m of this.milestones) m.el.toggleClass('is-passed', m.fraction <= f);
   }
 
-  private isVerticalProgress(): boolean {
-    return this.plugin.settings.progressBarPosition === 'right';
+  /** The chapter side rail replaces the bottom bar on mobile when enabled. */
+  private useSideRail(): boolean {
+    return Platform.isMobile && this.plugin.settings.progressBarPosition === 'right';
   }
 
   setLoading(loading: boolean): void {
@@ -158,6 +158,12 @@ export class ReaderView extends FileView implements ReaderHost {
 
     // Bottom progress bar with a scrub slider (primary navigation on mobile).
     this.buildBottomBar(root);
+    if (Platform.isMobile) {
+      this.sideRail = new SideRail(root, {
+        seek: (f) => this.epub?.seekInChapter(f),
+        jump: (dir) => this.epub?.jumpChapter(dir),
+      });
+    }
     this.applyProgressBarPosition();
 
     const arrayBuffer = await this.app.vault.readBinary(file);
@@ -218,7 +224,13 @@ export class ReaderView extends FileView implements ReaderHost {
   private measureMobileNavbar(): void {
     if (!this.rootEl) return;
     const navbar = document.body.querySelector<HTMLElement>('.mobile-navbar');
-    const h = navbar && navbar.offsetParent !== null ? navbar.offsetHeight : 0;
+    let h = 0;
+    if (navbar && navbar.offsetParent !== null) {
+      // Measure the overlap on screen: the floating navbar sits above a bottom
+      // gap that offsetHeight doesn't include.
+      const overlap = this.rootEl.getBoundingClientRect().bottom - navbar.getBoundingClientRect().top;
+      h = Math.max(0, Math.ceil(overlap));
+    }
     this.rootEl.style.setProperty('--rr-navbar-h', `${h}px`);
   }
 
@@ -232,30 +244,30 @@ export class ReaderView extends FileView implements ReaderHost {
   private buildTopBar(root: HTMLElement): void {
     const bar = root.createDiv({ cls: 'rr-topbar' });
 
-    // Left: version badge (also confirms which build is loaded) + title.
-    bar.createDiv({ cls: 'rr-topbar-title', text: `v${this.plugin.manifest.version}` });
+    // Left: the chapter being read (updated on scroll).
+    this.chapterTitleEl = bar.createDiv({ cls: 'rr-topbar-title', text: this.file?.basename ?? '' });
 
-    const toc = bar.createEl('button', { cls: 'rr-iconbtn rr-keep-mobile', attr: { 'aria-label': 'Table of contents' } });
+    const toc = bar.createEl('button', { cls: 'rr-iconbtn clickable-iconrr-keep-mobile', attr: { 'aria-label': 'Table of contents' } });
     setIcon(toc, 'list');
     toc.onclick = () => this.openTableOfContents();
     this.tocButton = toc;
 
-    const search = bar.createEl('button', { cls: 'rr-iconbtn rr-keep-mobile', attr: { 'aria-label': 'Search in book' } });
+    const search = bar.createEl('button', { cls: 'rr-iconbtn clickable-iconrr-keep-mobile', attr: { 'aria-label': 'Search in book' } });
     setIcon(search, 'search');
     search.onclick = () => this.openSearch();
     this.searchButton = search;
 
-    const prev = bar.createEl('button', { cls: 'rr-iconbtn', attr: { 'aria-label': 'Previous' } });
+    const prev = bar.createEl('button', { cls: 'rr-iconbtn clickable-icon', attr: { 'aria-label': 'Previous' } });
     setIcon(prev, 'chevron-left');
     prev.onclick = () => this.reader?.navigate(-1);
 
     this.pageIndicator = bar.createDiv({ cls: 'rr-page-indicator', text: '…' });
 
-    const next = bar.createEl('button', { cls: 'rr-iconbtn', attr: { 'aria-label': 'Next' } });
+    const next = bar.createEl('button', { cls: 'rr-iconbtn clickable-icon', attr: { 'aria-label': 'Next' } });
     setIcon(next, 'chevron-right');
     next.onclick = () => this.reader?.navigate(1);
 
-    const gear = bar.createEl('button', { cls: 'rr-iconbtn rr-gear', attr: { 'aria-label': 'Reader settings' } });
+    const gear = bar.createEl('button', { cls: 'rr-iconbtn clickable-iconrr-gear', attr: { 'aria-label': 'Reader settings' } });
     setIcon(gear, 'settings-2');
     gear.onclick = () => this.toggleSettingsPanel(root);
   }
@@ -278,9 +290,7 @@ export class ReaderView extends FileView implements ReaderHost {
 
     const seekFrom = (e: PointerEvent): void => {
       const rect = slider.getBoundingClientRect();
-      const frac = this.isVerticalProgress()
-        ? (rect.height > 0 ? (e.clientY - rect.top) / rect.height : 0)
-        : (rect.width > 0 ? (e.clientX - rect.left) / rect.width : 0);
+      const frac = rect.width > 0 ? (e.clientX - rect.left) / rect.width : 0;
       const clamped = Math.max(0, Math.min(1, frac));
       this.updateSliderVisual(clamped);
       this.reader?.seek(clamped);
@@ -288,7 +298,6 @@ export class ReaderView extends FileView implements ReaderHost {
 
     slider.addEventListener('pointerdown', (e: PointerEvent) => {
       this.sliderActive = true;
-      bar.addClass('is-scrubbing');
       slider.setPointerCapture(e.pointerId);
       seekFrom(e);
       e.preventDefault();
@@ -303,7 +312,6 @@ export class ReaderView extends FileView implements ReaderHost {
     const end = (e: PointerEvent): void => {
       if (!this.sliderActive) return;
       this.sliderActive = false;
-      bar.removeClass('is-scrubbing');
       e.stopPropagation();
       try { slider.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
     };
@@ -529,12 +537,29 @@ export class ReaderView extends FileView implements ReaderHost {
     // Font family row
     this.buildFontRow(panel);
 
-    // Progress bar position row
+    // Progress bar position row (the side rail is mobile-only).
+    if (Platform.isMobile) this.buildProgressRow(panel);
+
+    // Bookmarks list + add button
+    this.buildBookmarksSection(panel);
+
+    // Export reading notes
+    const exportRow = panel.createDiv({ cls: 'rr-qs-row' });
+    exportRow.createSpan({ text: 'Notes', cls: 'rr-qs-label' });
+    const exportBtn = exportRow.createEl('button', { cls: 'rr-qs-chip rr-qs-wide', text: 'Export to note' });
+    exportBtn.onclick = () => void this.exportNotes();
+
+    // Which build is loaded (moved here from the top bar).
+    panel.createDiv({ cls: 'rr-qs-version', text: `R Reader v${this.plugin.manifest.version}` });
+  }
+
+  private buildProgressRow(panel: HTMLElement): void {
+    const { settings } = this.plugin;
     const posRow = panel.createDiv({ cls: 'rr-qs-row' });
     posRow.createSpan({ text: 'Progress', cls: 'rr-qs-label' });
     const positions: { value: ProgressBarPosition; label: string }[] = [
       { value: 'bottom', label: 'bottom' },
-      { value: 'right', label: 'right' },
+      { value: 'right', label: 'side' },
     ];
     for (const p of positions) {
       const btn = posRow.createEl('button', { cls: 'rr-qs-chip', text: p.label });
@@ -546,15 +571,6 @@ export class ReaderView extends FileView implements ReaderHost {
         btn.addClass('is-active');
       };
     }
-
-    // Bookmarks list + add button
-    this.buildBookmarksSection(panel);
-
-    // Export reading notes
-    const exportRow = panel.createDiv({ cls: 'rr-qs-row' });
-    exportRow.createSpan({ text: 'Notes', cls: 'rr-qs-label' });
-    const exportBtn = exportRow.createEl('button', { cls: 'rr-qs-chip rr-qs-wide', text: 'Export to note' });
-    exportBtn.onclick = () => void this.exportNotes();
   }
 
   private buildBookmarksSection(panel: HTMLElement): void {
@@ -644,15 +660,9 @@ export class ReaderView extends FileView implements ReaderHost {
     this.reader?.applySettings(this.plugin.settings);
   }
 
-  /** Switch the progress slider between the bottom bar and the right-edge rail. */
+  /** Show either the bottom bar or the (mobile) chapter side rail. */
   private applyProgressBarPosition(): void {
-    const vertical = this.isVerticalProgress();
-    this.rootEl?.toggleClass('rr-progress-right', vertical);
-    // Drop the inline sizing from the other orientation before re-applying.
-    if (this.sliderFill) { this.sliderFill.style.width = ''; this.sliderFill.style.height = ''; }
-    if (this.sliderThumb) { this.sliderThumb.style.left = ''; this.sliderThumb.style.top = ''; }
-    this.positionMilestones();
-    this.updateSliderVisual(this.lastFraction);
+    this.rootEl?.toggleClass('rr-progress-right', this.useSideRail());
   }
 
   private teardown(): void {
@@ -683,6 +693,9 @@ export class ReaderView extends FileView implements ReaderHost {
     this.sliderLabel = null;
     this.sliderDots = null;
     this.milestones = [];
+    this.sideRail?.destroy();
+    this.sideRail = null;
+    this.chapterTitleEl = null;
     this.sliderActive = false;
     this.chromeHidden = false;
   }
