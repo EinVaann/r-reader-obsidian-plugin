@@ -9,6 +9,7 @@ import { HIGHLIGHT_COLORS } from './src/annotations/types';
 import { LIBRARY_VIEW_TYPE, LibraryView } from './src/library/LibraryView';
 import { CoverCache } from './src/library/CoverCache';
 import type { EpubCacheEntry } from './src/readers/EpubReader';
+import { createSettingsStore, type SettingsStore } from './src/reader/store';
 
 interface RReaderData {
   settings?: Partial<PluginSettings>;
@@ -26,6 +27,8 @@ export default class RReaderPlugin extends Plugin {
   epubCache = new Map<string, EpubCacheEntry>();
   /** Library cover thumbnails + metadata, persisted to the plugin folder. */
   coverCache = new CoverCache(this);
+  /** Settings mirrored for the React UI; refreshed by every saveSettings(). */
+  settingsStore!: SettingsStore;
 
   async onload(): Promise<void> {
     // Settings and reading progress share one data.json. Read both from a
@@ -49,6 +52,7 @@ export default class RReaderPlugin extends Plugin {
       this.settings.progressBarPosition = 'right';
       this.settings.progressMigratedToRight = true;
     }
+    this.settingsStore = createSettingsStore(this.settings);
     this.progressManager = new ProgressManager(this);
     this.progressManager.load(progressData, lastReadData, raw?.anchors ?? {});
     this.annotationManager = new AnnotationManager(this);
@@ -254,13 +258,12 @@ export default class RReaderPlugin extends Plugin {
   }
 
   async saveSettings(): Promise<void> {
-    await this.persist();
-    // Propagate live to all open reader views
+    // Update the UI and the open books first; the write to disk can lag.
+    this.settingsStore.setState({ settings: { ...this.settings } });
     this.app.workspace.getLeavesOfType(READER_VIEW_TYPE).forEach((leaf) => {
       const view = leaf.view;
-      if (view instanceof ReaderView) {
-        view.refreshSettings();
-      }
+      if (view instanceof ReaderView) view.refreshSettings();
     });
+    await this.persist();
   }
 }

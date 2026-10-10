@@ -51,11 +51,15 @@ const context = await esbuild.context({
     ...builtins,
   ],
   plugins: [stubFoliatePdf],
+  // React ships a much slower development build unless NODE_ENV is "production".
+  define: { "process.env.NODE_ENV": JSON.stringify(prod ? "production" : "development") },
+  jsx: "automatic",
   format: "cjs",
   platform: "browser",
   target: "es2022",
   logLevel: "info",
   sourcemap: prod ? false : "inline",
+  minify: prod,
   treeShaking: true,
   outfile: "main.js",
 });

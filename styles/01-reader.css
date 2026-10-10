@@ -169,3 +169,11 @@
   word-break: break-word;
 }
 
+
+/* <Icon> wrapper span (svg drawn by setIcon). */
+.rr-icon { display: inline-flex; align-items: center; justify-content: center; }
+
+/* Bookmark-name prompt. */
+.rr-prompt h3 { margin-top: 0; }
+.rr-prompt-input { width: 100%; }
+.rr-prompt-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }

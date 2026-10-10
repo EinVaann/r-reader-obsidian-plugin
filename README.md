@@ -25,7 +25,8 @@ across devices.
 - **Export reading notes** — write all your highlights (grouped by chapter, with notes) and
   bookmarks to a Markdown note in your vault.
 - **Themes & fonts** — light / dark / sepia, adjustable font size and line height, and a
-  font picker with embedded Fira Code and Bricolage Grotesque (no install needed).
+  font picker with embedded Libron (a serif tuned for reading on screens), Fira Code and
+  Bricolage Grotesque (no install needed).
 - **Mobile-first** — floating bars, a full-width progress slider, tap-to-scroll, and an
   immersive full-screen mode that hides Obsidian's own chrome.
 - **Fast re-opens** — books are cached in memory after the first load, so reopening is
@@ -118,3 +119,6 @@ npm run deploy   # build + copy main.js/manifest.json/styles.css into a test vau
 The renderer uses [foliate-js](https://github.com/johnfactotum/foliate-js) (vendored as a
 submodule) purely as an EPUB **parser**; rendering is a custom continuous DOM renderer with
 no iframes (so there are no CSP/sandbox issues).
+
+Libron (c) 2026 Nico Verbruggen, embedded under the SIL Open Font License 1.1 —
+see https://github.com/nicoverbruggen/libron.
