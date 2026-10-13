@@ -5,6 +5,8 @@ export type Theme = 'obsidian' | 'light' | 'dark' | 'sepia';
 export type ScrollMode = 'paginated' | 'continuous';
 /** Where the reading-progress slider sits: a bottom bar, or a floating right rail. */
 export type ProgressBarPosition = 'bottom' | 'right';
+/** `.ark` story view: scrolling script, or visual novel. */
+export type StoryView = 'script' | 'vn';
 
 export interface PluginSettings {
   theme: Theme;
@@ -38,10 +40,16 @@ export interface PluginSettings {
   storyAssetsFolder: string;
   /** In `.ark` stories, play the music of the scene being read while scrolling. */
   storyAutoplayMusic: boolean;
+  /** How `.ark` stories open: the scrolling script, or the visual-novel stage. */
+  storyDefaultView: StoryView;
+  /** Visual-novel view: letters per second for typed-out lines; 0 shows lines at once. */
+  storyTextSpeed: number;
   /** Group the library by folder (vs. one flat grid). */
   libraryGroupByFolder: boolean;
   /** Library section keys (folder paths / "__recent" / "__all") collapsed by the user. */
   libraryCollapsed: string[];
+  /** Library tab last shown: EPUB books, or `.ark` stories by storyline. */
+  libraryTab: 'books' | 'ark';
   /** Set once the old 'dark' default has been migrated to the 'obsidian' theme. */
   themeMigratedToObsidian: boolean;
   /** Set once the progress bar has been moved to the side rail by default. */
@@ -67,8 +75,11 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   storyNickname: 'Doctor',
   storyAssetsFolder: 'Arknights Story Assets',
   storyAutoplayMusic: true,
+  storyDefaultView: 'script',
+  storyTextSpeed: 0,
   libraryGroupByFolder: true,
   libraryCollapsed: [],
+  libraryTab: 'books',
   themeMigratedToObsidian: true,
   progressMigratedToRight: true,
 };

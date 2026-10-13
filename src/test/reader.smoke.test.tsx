@@ -78,6 +78,7 @@ function setup(opts: { isMobile?: boolean } = {}) {
       Object.assign(settingsData, patch);
       settings.setState({ settings: { ...settingsData } });
     },
+    toggleStoryView: () => store.setState((s) => ({ storyView: s.storyView === 'vn' ? 'script' : 'vn' })),
   };
   let clickHandler: ((id: string, el: HTMLElement) => void) | null = null;
   const highlights: HighlightActions = {
@@ -312,5 +313,63 @@ describe('library', () => {
     // Search narrows the list.
     await act(async () => setInput($('.rr-library-search', view.contentEl) as HTMLInputElement, 'tiny'));
     expect($$('.rr-library-section-title', view.contentEl).map((t) => t.textContent)).toEqual(['Vault root']);
+  });
+
+  it('Arknights tab: stories by storyline in reading order, with recent reads', async () => {
+    const { LibraryView } = await import('../library/LibraryView');
+    const mk = (p: string) => {
+      const f = new (TFile as unknown as new (path: string) => TFile)(p);
+      const folder = p.split('/').slice(0, -1);
+      f.parent = { path: folder.join('/'), name: folder[folder.length - 1] } as TFile['parent'];
+      return f;
+    };
+    const files = [
+      mk('AK/Small Stories/Tales of Terra/13 - A Kazdelian Rescue.ark'),
+      mk('AK/Big Stories/Tales of Terra/01 - Code of Brawl.ark'),
+      mk('AK/Big Stories/Unassigned Side Stories/02 - Delicious On Terra.ark'),
+      mk('AK/Big Stories/Main Theme/02 - Evil Time Part 2.ark'),
+      mk('AK/Big Stories/Main Theme/01 - Evil Time Part 1.ark'),
+      mk('Books/Novel.epub'),
+    ];
+    const settingsData = { ...DEFAULT_SETTINGS, libraryTab: 'ark' as const };
+    const plugin = {
+      settings: settingsData,
+      settingsStore: createSettingsStore(settingsData),
+      saveSettings: async () => plugin.settingsStore.setState({ settings: { ...settingsData } }),
+      progressManager: {
+        get: (p: string) => (p.endsWith('Part 2.ark') ? 0.5 : undefined),
+        getLastRead: (p: string) => (p.endsWith('Part 2.ark') ? 5 : undefined),
+      },
+      annotationManager: { highlightCount: () => 0 },
+      coverCache: { getDetails: async () => ({ coverUrl: null, title: '', author: '' }), invalidateAll: async () => {} },
+    };
+    const view = new (LibraryView as unknown as new (leaf: unknown, plugin: unknown) => { contentEl: HTMLElement; app: unknown; onOpen(): Promise<void>; onClose(): Promise<void>; registerEvent(): void })(null, plugin);
+    view.contentEl = document.body.createDiv();
+    view.app = { vault: { getFiles: () => files, on: () => ({}) }, workspace: { getLeaf: () => ({ openFile: async () => {} }) } };
+    view.registerEvent = () => {};
+    await act(async () => view.onOpen());
+    cleanup.push(() => void view.onClose());
+
+    expect($$('.rr-library-tab', view.contentEl).map((t) => t.textContent)).toEqual(['Books', 'Arknights']);
+    expect($$('.rr-library-section-title', view.contentEl).map((t) => t.textContent)).toEqual([
+      'Recently read',
+      'Main Theme',
+      'Tales of Terra',
+      'Unassigned Side Stories',
+    ]);
+    const rows = (i: number) =>
+      $$('.rr-library-section', view.contentEl)[i].querySelectorAll('.rr-story-row');
+    expect(Array.from(rows(1)).map((r) => r.querySelector('.rr-story-title')!.textContent)).toEqual(['Evil Time Part 1', 'Evil Time Part 2']);
+    // Big and Small Stories of one storyline merge, in story-number order.
+    expect(Array.from(rows(2)).map((r) => r.querySelector('.rr-story-num')!.textContent)).toEqual(['01', '13']);
+    expect(rows(0)[0].querySelector('.rr-story-line')!.textContent).toBe('Main Theme');
+    expect(rows(0)[0].querySelector('.rr-story-pct')!.textContent).toBe('50%');
+
+    // Search covers storyline names; switching tabs is remembered.
+    await act(async () => setInput($('.rr-library-search', view.contentEl) as HTMLInputElement, 'terra'));
+    expect($$('.rr-story-title', view.contentEl).map((t) => t.textContent)).toEqual(['Code of Brawl', 'A Kazdelian Rescue', 'Delicious On Terra']);
+    await act(async () => $$('.rr-library-tab', view.contentEl)[0].click());
+    expect(settingsData.libraryTab).toBe('books');
+    expect($$('.rr-story-row', view.contentEl)).toHaveLength(0);
   });
 });

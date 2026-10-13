@@ -1,6 +1,6 @@
 import { App, Notice, PluginSettingTab, Setting } from 'obsidian';
 import type RReaderPlugin from '../../main';
-import type { Theme, ScrollMode, ProgressBarPosition } from './settings';
+import type { Theme, ScrollMode, ProgressBarPosition, StoryView } from './settings';
 import type { HighlightColor } from '../annotations/types';
 
 export class RReaderSettingsTab extends PluginSettingTab {
@@ -200,21 +200,30 @@ export class RReaderSettingsTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Story nickname')
-      .setDesc('Your name in .ark stories, wherever the script addresses the Doctor by name.')
-      .addText((t) =>
-        t
-          .setPlaceholder('Doctor')
-          .setValue(this.plugin.settings.storyNickname)
-          .onChange(async (v) => {
-            this.plugin.settings.storyNickname = v.trim() || 'Doctor';
-            await this.plugin.saveSettings();
+      .setName('Clear EPUB cache')
+      .setDesc('Books are cached in memory after the first load so re-opening them is instant. Clear this if a book looks wrong or after toggling no-image mode.')
+      .addButton((b) =>
+        b
+          .setButtonText('Clear cache')
+          .onClick(() => {
+            this.plugin.clearEpubCache();
+            new Notice('R Reader: EPUB cache cleared');
           }),
       );
 
+    this.displayStorySettings(containerEl);
+  }
+
+  /** Settings that only apply to `.ark` stories, under their own heading. */
+  private displayStorySettings(containerEl: HTMLElement): void {
     new Setting(containerEl)
-      .setName('Story assets folder')
-      .setDesc('Vault folder holding media.json and the images and audio .ark stories use. Reopen a story after changing it.')
+      .setHeading()
+      .setName('Arknights stories (.ark)')
+      .setDesc('Story scripts read in script or visual-novel view.');
+
+    new Setting(containerEl)
+      .setName('Assets folder')
+      .setDesc('Vault folder holding media.json and the images and audio stories use. Reopen a story after changing it.')
       .addText((t) =>
         t
           .setPlaceholder('Arknights Story Assets')
@@ -226,25 +235,53 @@ export class RReaderSettingsTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Autoplay story music')
-      .setDesc('In .ark stories, play each scene\'s music as you scroll to it. Off: tap a music bar to play it.')
+      .setName('Default view')
+      .setDesc('How stories open. Switch any time with the button in the reader\'s top bar.')
+      .addDropdown((d) =>
+        d
+          .addOptions({ script: 'Script (scroll)', vn: 'Visual novel' })
+          .setValue(this.plugin.settings.storyDefaultView)
+          .onChange(async (v) => {
+            this.plugin.settings.storyDefaultView = v as StoryView;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Nickname')
+      .setDesc('Your name wherever the script addresses the Doctor by name.')
+      .addText((t) =>
+        t
+          .setPlaceholder('Doctor')
+          .setValue(this.plugin.settings.storyNickname)
+          .onChange(async (v) => {
+            this.plugin.settings.storyNickname = v.trim() || 'Doctor';
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Text speed')
+      .setDesc('Visual-novel view: letters per second as a line types out. 0 shows each line at once.')
+      .addSlider((s) =>
+        s
+          .setLimits(0, 120, 5)
+          .setValue(this.plugin.settings.storyTextSpeed)
+          .setDynamicTooltip()
+          .onChange(async (v) => {
+            this.plugin.settings.storyTextSpeed = v;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Autoplay music')
+      .setDesc('Script view: play each scene\'s music as you scroll to it. Off: tap a music bar to play it.')
       .addToggle((t) =>
         t.setValue(this.plugin.settings.storyAutoplayMusic).onChange(async (v) => {
           this.plugin.settings.storyAutoplayMusic = v;
           await this.plugin.saveSettings();
         }),
-      );
-
-    new Setting(containerEl)
-      .setName('Clear EPUB cache')
-      .setDesc('Books are cached in memory after the first load so re-opening them is instant. Clear this if a book looks wrong or after toggling no-image mode.')
-      .addButton((b) =>
-        b
-          .setButtonText('Clear cache')
-          .onClick(() => {
-            this.plugin.clearEpubCache();
-            new Notice('R Reader: EPUB cache cleared');
-          }),
       );
   }
 }

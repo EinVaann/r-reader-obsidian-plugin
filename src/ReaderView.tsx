@@ -1,8 +1,10 @@
 import { FileView, Notice, Platform, TFile, WorkspaceLeaf } from 'obsidian';
 import type RReaderPlugin from '../main';
 import { EpubReader, type FoliateBook } from './readers/EpubReader';
-import { openArkBook } from './readers/ark/arkBook';
+import { openArkBook, type ArkOpened } from './readers/ark/arkBook';
 import { ArkInteractions } from './readers/ark/ArkInteractions';
+import { VnPlayer } from './readers/ark/vn/VnPlayer';
+import { parseKey } from './readers/ark/vn/script';
 import { MobileControls } from './mobile/MobileControls';
 import { makeId } from './annotations/AnnotationManager';
 import type { Highlight } from './annotations/types';
@@ -38,6 +40,11 @@ export class ReaderView extends FileView implements ReaderHost {
   private ark: ArkInteractions | null = null;
   /** Tab title from the book's metadata, when it beats the file name. */
   private bookTitle: string | null = null;
+  /** The open `.ark` story's script and media, for the visual-novel view. */
+  private story: ArkOpened | null = null;
+  /** The visual-novel view, while it's on screen. */
+  private vn: VnPlayer | null = null;
+  private contentArea: HTMLElement | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: RReaderPlugin) {
     super(leaf);
@@ -135,11 +142,14 @@ export class ReaderView extends FileView implements ReaderHost {
 
     const { settings } = this.plugin;
     let source: ArrayBuffer | FoliateBook;
+    let story: ArkOpened | null = null;
     try {
-      source =
-        ext === 'ark'
-          ? await openArkBook(this.app, file, { nickname: settings.storyNickname, assetsFolder: settings.storyAssetsFolder })
-          : await this.app.vault.readBinary(file);
+      if (ext === 'ark') {
+        story = await openArkBook(this.app, file, { nickname: settings.storyNickname, assetsFolder: settings.storyAssetsFolder });
+        source = story.book;
+      } else {
+        source = await this.app.vault.readBinary(file);
+      }
     } catch (e) {
       store.setState({ loading: false, error: `Failed to open .${ext}:\n${e instanceof Error ? e.message : String(e)}` });
       console.error('R Reader: open failed', e);
@@ -169,10 +179,14 @@ export class ReaderView extends FileView implements ReaderHost {
     if (this.store !== store) return;
 
     const contentEl = reader.getContentEl();
-    if (ext === 'ark' && contentEl) {
+    this.contentArea = contentArea;
+    if (story && contentEl) {
+      this.story = story;
       this.ark = new ArkInteractions(contentEl, reader.getScrollEl());
       this.ark.setNickname(settings.storyNickname);
       this.ark.setAutoplay(settings.storyAutoplayMusic);
+      store.setState({ storyView: 'script' });
+      if (settings.storyDefaultView === 'vn') this.enterVn();
     }
     // Stories are named by their manifest ("manifest.ark"); show the story title instead.
     this.bookTitle = ext === 'ark' ? reader.getMetadata()?.title ?? null : null;
@@ -183,7 +197,7 @@ export class ReaderView extends FileView implements ReaderHost {
 
     if (Platform.isMobile) {
       if (settings.touchToScroll) {
-        this.mobile = new MobileControls(contentArea, (dir) => this.reader?.navigate(dir), () => this.toggleChrome());
+        this.mobile = new MobileControls(contentArea, (dir) => this.pageNavigate(dir), () => this.toggleChrome());
         this.mobile.mount();
       }
       this.measureMobileNavbar();
@@ -198,6 +212,10 @@ export class ReaderView extends FileView implements ReaderHost {
     document.body.removeClass('rr-immersive');
     this.unsubscribe?.();
     this.unsubscribe = null;
+    this.vn?.destroy();
+    this.vn = null;
+    this.story = null;
+    this.contentArea = null;
     this.ark?.destroy();
     this.ark = null;
     this.bookTitle = null;
@@ -223,21 +241,21 @@ export class ReaderView extends FileView implements ReaderHost {
         this.bookEl = bookEl;
         void this.openBook(file, contentArea, bookEl);
       },
-      navigate: (dir) => epub()?.navigate(dir),
-      seek: (f) => epub()?.seek(f),
-      jumpEntry: (dir) => epub()?.jumpEntry(dir),
+      navigate: (dir) => this.pageNavigate(dir),
+      seek: (f) => this.followJump(() => epub()?.seek(f)),
+      jumpEntry: (dir) => this.followJump(() => epub()?.jumpEntry(dir)),
       toggleChrome: () => this.toggleChrome(),
       setPanel: (panel) => this.setPanel(panel),
 
       getToc: () => epub()?.getToc() ?? [],
-      jumpToToc: (entry) => epub()?.goToChapter(entry.index, entry.id),
+      jumpToToc: (entry) => this.followJump(() => epub()?.goToChapter(entry.index, entry.id)),
       search: (q) => epub()?.search(q) ?? [],
-      jumpToHit: (hit, q) => epub()?.jumpToMatch(hit.chapterIndex, q),
+      jumpToHit: (hit, q) => this.followJump(() => epub()?.jumpToMatch(hit.chapterIndex, q)),
       clearSearch: () => epub()?.clearSearchMark(),
 
       getBookmarks: () => this.plugin.annotationManager.get(file.path).bookmarks,
       addBookmark: () => this.addBookmarkAtCurrent(),
-      goToBookmark: (b) => epub()?.goToLocation(b),
+      goToBookmark: (b) => this.followJump(() => epub()?.goToLocation(b)),
       deleteBookmark: async (id) => {
         await this.plugin.annotationManager.removeBookmark(file.path, id);
         this.bumpBookmarks();
@@ -248,7 +266,52 @@ export class ReaderView extends FileView implements ReaderHost {
         Object.assign(this.plugin.settings, patch);
         void this.plugin.saveSettings();
       },
+      toggleStoryView: () => (this.vn ? this.exitVn() : this.enterVn()),
     };
+  }
+
+  // --- Visual-novel view (.ark stories) --------------------------------------
+
+  /** Open the visual-novel view at the line at the top of the script view. */
+  private enterVn(): void {
+    const ark = this.ark;
+    const opened = this.story;
+    if (!ark || !opened || !this.contentArea || this.vn) return;
+    const { settings } = this.plugin;
+    ark.setAutoplay(false); // the stage plays its own music
+    const top = ark.topSegment();
+    this.vn = new VnPlayer(
+      this.contentArea,
+      opened.story,
+      opened.resolve,
+      {
+        nickname: settings.storyNickname,
+        textSpeed: settings.storyTextSpeed,
+        onToggleChrome: () => this.toggleChrome(),
+        onFrame: (frame) => ark.scrollToSegment(frame.key),
+        onChoose: (chapter, choice, value) => ark.selectChoice(chapter, choice, value),
+      },
+      ark.pickedChoices(),
+    );
+    this.vn.start(top ? parseKey(top) : null);
+    this.store?.setState({ storyView: 'vn' });
+  }
+
+  /** Back to the script view; it already follows the stage, so the place is kept. */
+  private exitVn(): void {
+    if (!this.vn) return;
+    this.vn.destroy();
+    this.vn = null;
+    this.ark?.setAutoplay(this.plugin.settings.storyAutoplayMusic);
+    this.store?.setState({ storyView: 'script' });
+  }
+
+  /** Run a jump in the script view (TOC, search, bookmark, slider); the stage restarts there. */
+  private followJump(jump: () => void): void {
+    jump();
+    if (!this.vn) return;
+    this.exitVn();
+    requestAnimationFrame(() => this.enterVn());
   }
 
   private makeHighlightActions(file: TFile): HighlightActions {
@@ -338,8 +401,13 @@ export class ReaderView extends FileView implements ReaderHost {
     this.toggleChrome();
   }
 
-  /** Scroll a screen forward (1) or backward (-1). */
+  /** Scroll a screen forward (1) or backward (-1); in the visual-novel view, next / previous line. */
   pageNavigate(dir: 1 | -1): void {
+    if (this.vn) {
+      if (dir === 1) this.vn.advance();
+      else this.vn.back();
+      return;
+    }
     this.reader?.navigate(dir);
   }
 
@@ -413,6 +481,7 @@ export class ReaderView extends FileView implements ReaderHost {
   refreshSettings(): void {
     this.reader?.applySettings(this.plugin.settings);
     this.ark?.setNickname(this.plugin.settings.storyNickname);
-    this.ark?.setAutoplay(this.plugin.settings.storyAutoplayMusic);
+    this.ark?.setAutoplay(this.plugin.settings.storyAutoplayMusic && !this.vn);
+    this.vn?.setOptions({ nickname: this.plugin.settings.storyNickname, textSpeed: this.plugin.settings.storyTextSpeed });
   }
 }

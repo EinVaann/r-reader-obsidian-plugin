@@ -30,6 +30,8 @@ export interface ReaderActions {
   exportNotes: () => void;
 
   updateSettings: (patch: Partial<PluginSettings>) => void;
+  /** `.ark` stories: switch between the script and visual-novel views, keeping the place. */
+  toggleStoryView: () => void;
 }
 
 /** Hooks the selection toolbar uses to create and edit highlights. */

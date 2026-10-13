@@ -66,8 +66,9 @@ export class MobileControls {
       // A long-press starts a text selection (highlighting), not a page turn.
       if (Date.now() - this.touchStartTime > 400) return;
 
-      // Taps on controls in the book (story choices, audio, links) are theirs.
-      if ((e.target as Element | null)?.closest?.('a, button, [role="button"]')) return;
+      // Taps on controls in the book (story choices, audio, links) and on the
+      // visual-novel stage (which has its own tap zones) are theirs.
+      if ((e.target as Element | null)?.closest?.('a, button, [role="button"], .rr-vn')) return;
 
       // If text is currently selected, the tap is for selecting/dismissing it.
       const sel = this.el.ownerDocument.getSelection();

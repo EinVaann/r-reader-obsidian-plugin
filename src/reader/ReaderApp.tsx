@@ -64,6 +64,7 @@ function TopBar({ title }: { title: string }) {
   const { actions } = useReaderContext();
   const label = useReader((s) => s.chapterLabel) || title;
   const panel = useReader((s) => s.panel);
+  const storyView = useReader((s) => s.storyView);
   const toggle = (p: Exclude<ReaderPanel, null>): void => actions.setPanel(panel === p ? null : p);
 
   return (
@@ -72,6 +73,15 @@ function TopBar({ title }: { title: string }) {
       <div className="rr-topbar-title" title={label}>
         {label}
       </div>
+      {storyView && (
+        <button
+          className="rr-iconbtn clickable-icon rr-keep-mobile"
+          aria-label={storyView === 'vn' ? 'Switch to script view' : 'Switch to visual-novel view'}
+          onClick={() => actions.toggleStoryView()}
+        >
+          <Icon name={storyView === 'vn' ? 'scroll-text' : 'clapperboard'} />
+        </button>
+      )}
       <button className="rr-iconbtn clickable-icon rr-keep-mobile" aria-label="Table of contents" {...{ [PANEL_TOGGLE]: '' }} onClick={() => toggle('toc')}>
         <Icon name="list" />
       </button>

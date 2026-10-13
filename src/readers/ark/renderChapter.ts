@@ -67,14 +67,14 @@ export function trackName(key: string): string {
   return key.replace(/_(loop|intro)$/i, '');
 }
 
-function mediaId(seg: ArkSegment, field: string, kind: string, name: unknown): string | null {
+export function mediaId(seg: ArkSegment, field: string, kind: string, name: unknown): string | null {
   const id = seg.media?.[field];
   if (id) return id;
   return typeof name === 'string' && name ? `${kind}:${name}` : null;
 }
 
 /** Which of two on-screen sprites is in focus: 0, 1, or null for both. */
-function focusIndex(focus: ArkSegment['character_focus']): number | null {
+export function focusIndex(focus: ArkSegment['character_focus']): number | null {
   const f = String(focus ?? '').toLowerCase();
   if (f === '1' || f === 'l' || f === 'left') return 0;
   if (f === '2' || f === 'r' || f === 'right') return 1;
@@ -93,23 +93,27 @@ interface BranchState {
  * animation are dropped; music, sounds, scene images, dialogue, narration and
  * choices are kept. Branch lines after a choice carry `data-choice`/`data-values`
  * and are hidden unless their option is selected (the first, initially).
+ * Every element carries `data-seg="chapter:node:segment"` so the visual-novel
+ * view can start from (and scroll back to) the same line.
  */
-export function renderChapter(chapter: ArkChapter, resolve: MediaResolver, nickname: string): string {
+export function renderChapter(chapter: ArkChapter, resolve: MediaResolver, nickname: string, chapterIndex = 0): string {
   const out: string[] = [];
   let lastImage = '';
   let choiceCount = 0;
   let branch: BranchState | null = null;
+  let segKey = '';
 
   /** Opening tag; lines inside a choice's branch get its markers (and start hidden if unselected). */
   const open = (tag: string, cls: string, seg: ArkSegment, extra = ''): string => {
     const values = seg.choice_values;
+    const key = ` data-seg="${segKey}"`;
     if (!branch || !values || values.length === 0) {
       branch = null; // the first line outside a branch ends it
-      return `<${tag} class="${cls}"${extra}>`;
+      return `<${tag} class="${cls}"${key}${extra}>`;
     }
     const hidden = values.includes(branch.selected) ? '' : ' is-hidden';
     const attrs = ` data-choice="${branch.choice}" data-values="${escapeHtml(values.join(' '))}"`;
-    return `<${tag} class="${cls} rr-ark-branch${hidden}"${attrs}${extra}>`;
+    return `<${tag} class="${cls} rr-ark-branch${hidden}"${key}${attrs}${extra}>`;
   };
 
   chapter.nodes.forEach((node, ni) => {
@@ -123,7 +127,9 @@ export function renderChapter(chapter: ArkChapter, resolve: MediaResolver, nickn
     }
     branch = null;
 
-    for (const seg of node.segments) {
+    for (let si = 0; si < node.segments.length; si++) {
+      const seg = node.segments[si];
+      segKey = `${chapterIndex}:${ni}:${si}`;
       const action = (seg.action ?? '').toLowerCase();
       const params = seg.params ?? {};
 
@@ -150,7 +156,7 @@ export function renderChapter(chapter: ArkChapter, resolve: MediaResolver, nickn
       } else if (seg.segment_type === 'choice' && seg.choices?.length) {
         const n = choiceCount++;
         branch = null; // a choice is never itself part of the previous branch
-        out.push(`<div class="rr-ark-choice" data-choice="${n}">`);
+        out.push(`<div class="rr-ark-choice" data-choice="${n}" data-seg="${segKey}">`);
         out.push(`<p class="rr-ark-speaker">${escapeHtml(seg.speaker || 'Doctor')}</p>`);
         seg.choices.forEach((c, i) => {
           const sel = i === 0 ? ' is-selected' : '';

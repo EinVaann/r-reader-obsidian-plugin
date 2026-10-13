@@ -152,3 +152,67 @@
   color: var(--text-muted);
 }
 
+/* Books | Arknights tabs. */
+.rr-library-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+.rr-library-root .rr-library-tab {
+  height: auto;
+  padding: 6px 14px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+.rr-library-root .rr-library-tab.is-active {
+  border-bottom-color: var(--interactive-accent);
+  color: var(--text-normal);
+  font-weight: 600;
+}
+
+/* Arknights stories: one row per story. */
+.rr-story-list { display: flex; flex-direction: column; }
+.rr-story-row {
+  display: grid;
+  grid-template-columns: 2.6em 1fr 72px 3em;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.rr-story-row:hover { background: var(--background-modifier-hover); }
+.rr-story-num {
+  color: var(--text-faint);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.rr-story-name { display: flex; flex-direction: column; min-width: 0; }
+.rr-story-title {
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rr-story-line { font-size: 11px; color: var(--text-muted); }
+.rr-story-progress {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--background-modifier-border);
+  overflow: hidden;
+}
+.rr-story-progress-fill { display: block; height: 100%; background: var(--interactive-accent); }
+.rr-story-pct {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+

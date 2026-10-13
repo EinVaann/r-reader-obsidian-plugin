@@ -69,6 +69,47 @@ export class ArkInteractions {
     });
   }
 
+  // --- Position and choices, shared with the visual-novel view ---------------
+
+  /** `data-seg` of the first visible line at or below the top of the screen. */
+  topSegment(): string | null {
+    const top = this.scrollEl?.getBoundingClientRect().top ?? 0;
+    for (const el of Array.from(this.contentEl.querySelectorAll<HTMLElement>('[data-seg]'))) {
+      if (el.closest('.is-hidden')) continue;
+      if (el.getBoundingClientRect().bottom > top + 1) return el.dataset.seg ?? null;
+    }
+    return null;
+  }
+
+  /** Scroll so the line with `data-seg="key"` (or its chapter, for a title) is at the top. */
+  scrollToSegment(key: string): void {
+    const scroll = this.scrollEl;
+    if (!scroll) return;
+    const [chapter, node, seg] = key.split(':');
+    let el = this.contentEl.querySelector<HTMLElement>(`[data-seg="${key}"]`);
+    if (!el && seg === '-1' && node === '0') el = this.contentEl.querySelector<HTMLElement>(`.rr-chapter[data-index="${chapter}"]`);
+    if (!el || el.closest('.is-hidden')) return;
+    scroll.scrollTop += el.getBoundingClientRect().top - scroll.getBoundingClientRect().top;
+  }
+
+  /** Selected option per choice, keyed `chapter:choice` like the visual-novel view. */
+  pickedChoices(): Map<string, string> {
+    const out = new Map<string, string>();
+    this.contentEl.querySelectorAll<HTMLElement>('.rr-ark-option.is-selected').forEach((o) => {
+      const chapter = o.closest<HTMLElement>('.rr-chapter')?.dataset.index;
+      if (chapter !== undefined && o.dataset.choice !== undefined) out.set(`${chapter}:${o.dataset.choice}`, o.dataset.value ?? '');
+    });
+    return out;
+  }
+
+  /** Show option `value`'s branch for choice `choice` of `chapter`. */
+  selectChoice(chapter: number, choice: number, value: string): void {
+    const option = this.contentEl.querySelector<HTMLElement>(
+      `.rr-chapter[data-index="${chapter}"] .rr-ark-option[data-choice="${choice}"][data-value="${CSS.escape(value)}"]`,
+    );
+    if (option) this.selectOption(option);
+  }
+
   /** A tap on a sound button or music bar. */
   private play(el: HTMLElement): void {
     const name = el.dataset.name ?? '';

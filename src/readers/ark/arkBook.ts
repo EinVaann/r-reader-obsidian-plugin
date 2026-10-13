@@ -49,25 +49,33 @@ function section(render: () => Promise<string>): FoliateSection {
   };
 }
 
+/** An opened story: the book the script view renders, plus what the visual-novel view needs. */
+export interface ArkOpened {
+  book: FoliateBook;
+  story: ArkStory;
+  resolve: MediaResolver;
+}
+
 /**
  * Open a `.ark` story as a book: its chapters in order, one TOC entry each.
- * Media comes from `assetsFolder` (the "Story assets folder" setting).
+ * Media comes from `assetsFolder` (the stories' "Assets folder" setting).
  */
-export async function openArkBook(app: App, file: TFile, opts: { nickname: string; assetsFolder: string }): Promise<FoliateBook> {
-  const story = await readJson<Partial<ArkStory>>(app, file.path);
-  if (story.format !== 'ark' || !Array.isArray(story.chapters)) {
+export async function openArkBook(app: App, file: TFile, opts: { nickname: string; assetsFolder: string }): Promise<ArkOpened> {
+  const data = await readJson<Partial<ArkStory>>(app, file.path);
+  if (data.format !== 'ark' || !Array.isArray(data.chapters)) {
     throw new Error('Not an .ark story: expected "format": "ark" with a "chapters" list');
   }
+  const story = data as ArkStory;
   const { nickname } = opts;
   const resolve = await makeResolver(app, opts.assetsFolder);
-  const chapters = story.chapters;
-  return {
-    sections: chapters.map((ch) => section(async () => renderChapter(ch, resolve, nickname))),
-    toc: chapters.map((ch, i) => ({ label: ch.title, href: `ch${i}` })),
+  const book: FoliateBook = {
+    sections: story.chapters.map((ch, i) => section(async () => renderChapter(ch, resolve, nickname, i))),
+    toc: story.chapters.map((ch, i) => ({ label: ch.title, href: `ch${i}` })),
     metadata: { title: story.eventName || file.basename },
     resolveHref: (href) => {
       const m = /^ch(\d+)/.exec(href);
       return m ? { index: Number(m[1]) } : null;
     },
   };
+  return { book, story, resolve };
 }

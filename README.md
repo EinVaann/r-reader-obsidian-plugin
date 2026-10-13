@@ -43,13 +43,19 @@ across devices.
 An `.ark` file is one story (JSON with `"format": "ark"`) holding its chapters in order.
 Images and audio live in a separate **assets folder** shared by every story, holding
 `media.json` (media ID → file) and the media files. Point the reader at it with the
-*Story assets folder* setting.
+*Assets folder* setting (under *Arknights stories* in the settings).
 
+- **Library**: an *Arknights* tab lists stories by storyline (from their folders) in reading
+  order, with recently read stories on top.
+- **Two views**: a scrolling script, or a visual-novel stage (background, characters, the
+  line at the bottom). Switch with the button in the top bar; your place is kept.
+- **Visual-novel taps**: top/left side goes back, right/bottom side continues, the center
+  shows or hides the bars. *Log* lists the lines read; tap one to go back to it.
 - **Choices**: the first option is shown; tap another to read its branch instead.
-- **Music**: plays as you scroll to each scene (turn off *Autoplay story music* to play
-  only on tap); tap a playing bar to stop it. Sound effects play on tap.
-- **Images**: tap a scene image or portrait to see it full size.
-- `{@nickname}` in the script uses the *Story nickname* setting (default "Doctor").
+- **Music**: in the script view it plays as you scroll to each scene (turn off *Autoplay
+  music* to play only on tap); the stage plays it as the script says.
+- **Images**: in the script view, tap a scene image or portrait to see it full size.
+- `{@nickname}` in the script uses the *Nickname* setting (default "Doctor").
 - Highlights are off for stories; bookmarks, search and progress work as in EPUBs.
 
 ---
@@ -113,9 +119,16 @@ Updates: BRAT can auto-update, or use *Check for updates* in BRAT.
 | Show EPUB files on all devices | Auto-enables "Detect all file extensions" |
 | Touch-to-scroll / Hide bars on mobile | Mobile reading controls |
 | Clear EPUB cache | Drop the in-memory render cache |
-| Story nickname | Name used for `{@nickname}` in `.ark` stories |
-| Story assets folder | Folder with `media.json` and media for `.ark` stories |
-| Autoplay story music | Play each scene's music while scrolling a story |
+
+**Arknights stories (.ark)** — a separate section at the bottom of the settings:
+
+| Setting | Description |
+|---|---|
+| Assets folder | Folder with `media.json` and the images and audio stories use |
+| Default view | Open stories in the script (scroll) or visual-novel view |
+| Nickname | Name used for `{@nickname}` in the script (default "Doctor") |
+| Text speed | Visual-novel view: letters per second as a line types out (0 = at once) |
+| Autoplay music | Script view: play each scene's music while scrolling |
 
 ---
 

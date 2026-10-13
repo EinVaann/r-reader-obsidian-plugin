@@ -1,4 +1,4 @@
-import { createContext, memo, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, memo, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useStore } from 'zustand';
 import { ItemView, Notice, type TFile, type WorkspaceLeaf } from 'obsidian';
 import type RReaderPlugin from '../../main';
@@ -49,10 +49,10 @@ export class LibraryView extends ItemView {
         <Library subscribe={subscribe} />
       </LibraryContext.Provider>,
     );
-    // Books added, removed or renamed while the library is open.
+    // Books and stories added, removed or renamed while the library is open.
     for (const event of ['create', 'delete', 'rename'] as const) {
       this.registerEvent(this.app.vault.on(event as 'create', (f) => {
-        if ('extension' in f && (f as TFile).extension.toLowerCase() === 'epub') this.render();
+        if ('extension' in f && ['epub', 'ark'].includes((f as TFile).extension.toLowerCase())) this.render();
       }));
     }
   }
@@ -90,13 +90,17 @@ function Library({ subscribe }: { subscribe: (fn: () => void) => () => void }) {
   useEffect(() => () => observer.disconnect(), [observer]);
 
   const all = useMemo(() => app.vault.getFiles().filter((f) => f.extension.toLowerCase() === 'epub'), [app, tick]);
+  const stories = useMemo(() => app.vault.getFiles().filter((f) => f.extension.toLowerCase() === 'ark'), [app, tick]);
+  // The Arknights tab only exists once the vault has stories.
+  const tab = stories.length > 0 ? settings.libraryTab : 'books';
+  const setTab = (t: 'books' | 'ark'): void => {
+    plugin.settings.libraryTab = t;
+    void plugin.saveSettings();
+  };
   const q = query.trim().toLowerCase();
   const files = q ? all.filter((f) => f.basename.toLowerCase().includes(q) || f.path.toLowerCase().includes(q)) : all;
 
-  const recent = files
-    .filter((f) => plugin.progressManager.getLastRead(f.path) != null)
-    .sort((a, b) => (plugin.progressManager.getLastRead(b.path) ?? 0) - (plugin.progressManager.getLastRead(a.path) ?? 0))
-    .slice(0, RECENT_LIMIT);
+  const recent = recentlyRead(files, plugin);
 
   const sections: { key: string; title: string; files: TFile[] }[] = [];
   if (recent.length > 0) sections.push({ key: KEY_RECENT, title: 'Recently read', files: recent });
@@ -130,39 +134,169 @@ function Library({ subscribe }: { subscribe: (fn: () => void) => () => void }) {
           <button className="rr-library-refresh" onClick={() => setTick((t) => t + 1)}>
             Refresh
           </button>
-          <button className="rr-library-refresh" title="Re-extract covers and metadata for all books" disabled={refreshing} onClick={() => void refreshMeta()}>
-            {refreshing ? 'Refreshing…' : 'Refresh meta'}
-          </button>
+          {tab === 'books' && (
+            <button className="rr-library-refresh" title="Re-extract covers and metadata for all books" disabled={refreshing} onClick={() => void refreshMeta()}>
+              {refreshing ? 'Refreshing…' : 'Refresh meta'}
+            </button>
+          )}
         </div>
       </div>
 
+      {stories.length > 0 && (
+        <div className="rr-library-tabs" role="tablist">
+          <button role="tab" aria-selected={tab === 'books'} className={tab === 'books' ? 'rr-library-tab is-active' : 'rr-library-tab'} onClick={() => setTab('books')}>
+            Books
+          </button>
+          <button role="tab" aria-selected={tab === 'ark'} className={tab === 'ark' ? 'rr-library-tab is-active' : 'rr-library-tab'} onClick={() => setTab('ark')}>
+            Arknights
+          </button>
+        </div>
+      )}
+
       <div className="rr-library-controls">
-        <input className="rr-library-search" type="search" placeholder="Search by title, author, or file…" value={query} onChange={(e) => setQuery(e.target.value)} />
-        <label className="rr-library-group">
-          <input
-            type="checkbox"
-            checked={settings.libraryGroupByFolder}
-            onChange={(e) => {
-              plugin.settings.libraryGroupByFolder = e.target.checked;
-              void plugin.saveSettings();
-            }}
-          />
-          <span>Group by folder</span>
-        </label>
+        <input
+          className="rr-library-search"
+          type="search"
+          placeholder={tab === 'ark' ? 'Search stories or storylines…' : 'Search by title, author, or file…'}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        {tab === 'books' && (
+          <label className="rr-library-group">
+            <input
+              type="checkbox"
+              checked={settings.libraryGroupByFolder}
+              onChange={(e) => {
+                plugin.settings.libraryGroupByFolder = e.target.checked;
+                void plugin.saveSettings();
+              }}
+            />
+            <span>Group by folder</span>
+          </label>
+        )}
       </div>
 
-      <div className="rr-library-body">
-        {all.length === 0 && <div className="rr-library-empty">No EPUB files found in this vault.</div>}
-        {all.length > 0 && files.length === 0 && <div className="rr-library-empty">No books match “{query.trim()}”.</div>}
-        {files.length > 0 &&
-          sections.map((s) => <Section key={s.key} sectionKey={s.key} title={s.title} files={s.files} observer={observer} tick={tick} />)}
-      </div>
+      {tab === 'ark' ? (
+        <div className="rr-library-body">
+          <StoryList stories={stories} query={q} />
+        </div>
+      ) : (
+        <div className="rr-library-body">
+          {all.length === 0 && <div className="rr-library-empty">No EPUB files found in this vault.</div>}
+          {all.length > 0 && files.length === 0 && <div className="rr-library-empty">No books match “{query.trim()}”.</div>}
+          {files.length > 0 &&
+            sections.map((s) => (
+              <Section key={s.key} sectionKey={s.key} title={s.title} count={s.files.length}>
+                <div className="rr-library-grid">
+                  {s.files.map((f) => (
+                    <BookCard key={f.path} file={f} observer={observer} tick={tick} />
+                  ))}
+                </div>
+              </Section>
+            ))}
+        </div>
+      )}
     </>
   );
 }
 
-/** A collapsible titled section with a grid of book cards. */
-function Section({ sectionKey, title, files, observer, tick }: { sectionKey: string; title: string; files: TFile[]; observer: CardObserver; tick: number }) {
+/** Files with a last-read time, most recent first. */
+function recentlyRead(files: TFile[], plugin: RReaderPlugin): TFile[] {
+  return files
+    .filter((f) => plugin.progressManager.getLastRead(f.path) != null)
+    .sort((a, b) => (plugin.progressManager.getLastRead(b.path) ?? 0) - (plugin.progressManager.getLastRead(a.path) ?? 0))
+    .slice(0, RECENT_LIMIT);
+}
+
+/** A story's number in its storyline, from its "NN - Title" file name. */
+function storyNumber(f: TFile): number {
+  const m = /^(\d+)\s*-\s*/.exec(f.basename);
+  return m ? Number(m[1]) : Number.MAX_SAFE_INTEGER;
+}
+
+function storyTitle(f: TFile): string {
+  return f.basename.replace(/^\d+\s*-\s*/, '');
+}
+
+/** A story's storyline: its folder (Big and Small Stories of one storyline share it). */
+function storyline(f: TFile): string {
+  return f.parent?.name || 'Stories';
+}
+
+/** Main Theme first, the "Unassigned …" groups last, the rest by name. */
+function storylineRank(name: string): [number, string] {
+  return [name === 'Main Theme' ? 0 : name.startsWith('Unassigned') ? 2 : 1, name];
+}
+
+/** The Arknights tab: recently read, then every storyline in reading order. */
+function StoryList({ stories, query }: { stories: TFile[]; query: string }) {
+  const { plugin } = useLibrary();
+  const files = query
+    ? stories.filter((f) => storyTitle(f).toLowerCase().includes(query) || storyline(f).toLowerCase().includes(query))
+    : stories;
+  if (files.length === 0) {
+    return <div className="rr-library-empty">{query ? `No stories match “${query}”.` : 'No .ark stories found in this vault.'}</div>;
+  }
+
+  const groups = new Map<string, TFile[]>();
+  for (const f of files) groups.set(storyline(f), [...(groups.get(storyline(f)) ?? []), f]);
+  const names = [...groups.keys()].sort((a, b) => {
+    const [ra, na] = storylineRank(a);
+    const [rb, nb] = storylineRank(b);
+    return ra - rb || na.localeCompare(nb);
+  });
+  const recent = recentlyRead(files, plugin);
+
+  return (
+    <>
+      {recent.length > 0 && (
+        <Section sectionKey="ark:__recent" title="Recently read" count={recent.length}>
+          <div className="rr-story-list">
+            {recent.map((f) => (
+              <StoryRow key={f.path} file={f} showStoryline />
+            ))}
+          </div>
+        </Section>
+      )}
+      {names.map((name) => {
+        const list = groups.get(name)!.sort((a, b) => storyNumber(a) - storyNumber(b) || a.basename.localeCompare(b.basename));
+        return (
+          <Section key={name} sectionKey={`ark:${name}`} title={name} count={list.length}>
+            <div className="rr-story-list">
+              {list.map((f) => (
+                <StoryRow key={f.path} file={f} />
+              ))}
+            </div>
+          </Section>
+        );
+      })}
+    </>
+  );
+}
+
+function StoryRow({ file, showStoryline = false }: { file: TFile; showStoryline?: boolean }) {
+  const app = useApp();
+  const { plugin } = useLibrary();
+  const saved = plugin.progressManager.get(file.path);
+  const frac = typeof saved === 'number' ? Math.max(0, Math.min(1, saved)) : 0;
+  const n = storyNumber(file);
+  return (
+    <div className="rr-story-row" data-path={file.path} onClick={() => void app.workspace.getLeaf(false).openFile(file)}>
+      <span className="rr-story-num">{n === Number.MAX_SAFE_INTEGER ? '' : String(n).padStart(2, '0')}</span>
+      <span className="rr-story-name">
+        <span className="rr-story-title">{storyTitle(file)}</span>
+        {showStoryline && <span className="rr-story-line">{storyline(file)}</span>}
+      </span>
+      <span className="rr-story-progress">
+        <span className="rr-story-progress-fill" style={{ width: `${frac * 100}%` }} />
+      </span>
+      <span className="rr-story-pct">{frac > 0 ? `${Math.round(frac * 100)}%` : ''}</span>
+    </div>
+  );
+}
+
+/** A collapsible titled section; collapsed sections don't render their contents. */
+function Section({ sectionKey, title, count, children }: { sectionKey: string; title: string; count: number; children: ReactNode }) {
   const { plugin } = useLibrary();
   const collapsed = useStore(plugin.settingsStore, (s) => s.settings.libraryCollapsed.includes(sectionKey));
   const toggle = (): void => {
@@ -178,16 +312,9 @@ function Section({ sectionKey, title, files, observer, tick }: { sectionKey: str
       <div className="rr-library-section-head" onClick={toggle}>
         <Icon name="chevron-right" className="rr-library-chevron" />
         <span className="rr-library-section-title">{title}</span>
-        <span className="rr-library-count">{files.length}</span>
+        <span className="rr-library-count">{count}</span>
       </div>
-      {/* Collapsed sections don't render their cards at all. */}
-      {!collapsed && (
-        <div className="rr-library-grid">
-          {files.map((f) => (
-            <BookCard key={f.path} file={f} observer={observer} tick={tick} />
-          ))}
-        </div>
-      )}
+      {!collapsed && children}
     </div>
   );
 }

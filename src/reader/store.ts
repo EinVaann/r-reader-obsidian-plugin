@@ -1,5 +1,5 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
-import type { PluginSettings } from '../settings/settings';
+import type { PluginSettings, StoryView } from '../settings/settings';
 
 /**
  * Plugin-wide settings, mirrored into a store so every open reader and the
@@ -42,6 +42,8 @@ export interface ReaderState {
   panel: ReaderPanel;
   /** Bumped when this book's bookmarks change, so lists re-read them. */
   bookmarksVersion: number;
+  /** For `.ark` stories, the view on screen; null for other books. */
+  storyView: StoryView | null;
 }
 
 export type ReaderStore = StoreApi<ReaderState>;
@@ -58,5 +60,6 @@ export function createReaderStore(title: string): ReaderStore {
     chromeHidden: false,
     panel: null,
     bookmarksVersion: 0,
+    storyView: null,
   }));
 }

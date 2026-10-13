@@ -1,0 +1,189 @@
+/* ---- .ark visual-novel view: a stage over the script view ---- */
+.rr-vn {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  overflow: hidden;
+  outline: none;
+  user-select: none;
+  -webkit-user-select: none;
+  background: #000;
+  color: #fff;
+  font-family: var(--rr-font-family);
+  font-size: var(--rr-font-size);
+  container-type: size;
+}
+.rr-vn-stage { position: absolute; inset: 0; }
+
+/* Background and CG: whole picture on wide screens, filled on tall (phone) ones. */
+.rr-vn .rr-vn-bg,
+.rr-vn .rr-vn-cg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+@container (orientation: portrait) {
+  .rr-vn .rr-vn-bg,
+  .rr-vn .rr-vn-cg { object-fit: cover; }
+}
+.rr-vn-bg.is-shown,
+.rr-vn-cg.is-shown { opacity: 1; }
+.rr-vn-cg { z-index: 3; }
+
+/* Characters stand at the bottom. Sprites are square with empty sides, so they
+   are sized from the stage and may overlap; more of them means smaller. */
+.rr-vn-chars { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+/* Obsidian caps image widths; stage images keep their own size and proportions. */
+.rr-vn img { max-width: none; max-height: none; }
+.rr-vn .rr-vn-char {
+  --rr-vn-size: min(92cqh, 200cqw);
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: var(--rr-vn-size);
+  height: var(--rr-vn-size);
+  object-fit: contain;
+  object-position: bottom;
+  transform: translateX(-50%);
+  transition: filter 0.2s ease;
+}
+.rr-vn-chars[data-count="2"] .rr-vn-char { --rr-vn-size: min(92cqh, 95cqw); }
+.rr-vn-chars[data-count="2"] .rr-vn-char:nth-child(1) { left: 28%; }
+.rr-vn-chars[data-count="2"] .rr-vn-char:nth-child(2) { left: 72%; }
+.rr-vn-chars[data-count="3"] .rr-vn-char { --rr-vn-size: min(92cqh, 70cqw); }
+.rr-vn-chars[data-count="3"] .rr-vn-char:nth-child(1) { left: 20%; }
+.rr-vn-chars[data-count="3"] .rr-vn-char:nth-child(3) { left: 80%; }
+.rr-vn-char.is-dim { filter: brightness(0.45); }
+
+/* The line: speaker above text, over a dark fade at the bottom. */
+.rr-vn-box {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 4;
+  padding: 4em max(1.2em, 8%) calc(2.2em + var(--rr-navbar-h, 0px));
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.88) 55%, transparent);
+  line-height: 1.5;
+}
+.rr-vn-speaker { font-weight: 700; opacity: 0.85; min-height: 1.5em; margin-bottom: 0.25em; }
+.rr-vn-text { min-height: 3em; }
+.rr-vn-box.is-narration .rr-vn-text { font-style: italic; text-align: center; }
+.rr-vn.is-title .rr-vn-box { display: none; }
+
+.rr-vn-title {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6em;
+  padding: 1em;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.75);
+}
+.rr-vn.is-title .rr-vn-title { display: flex; }
+.rr-vn-title-main { font-size: 1.7em; letter-spacing: 0.15em; text-transform: uppercase; }
+.rr-vn-title-sub { font-style: italic; opacity: 0.7; }
+
+/* "Tap to continue" marker. */
+.rr-vn-hint {
+  position: absolute;
+  right: 1.2em;
+  bottom: calc(0.8em + var(--rr-navbar-h, 0px));
+  z-index: 6;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.rr-vn-hint::before { content: '\25BE'; }
+.rr-vn-hint.is-visible { opacity: 0.7; animation: rr-vn-bob 1.2s ease-in-out infinite; }
+@keyframes rr-vn-bob { 50% { transform: translateY(4px); } }
+
+/* Choices. */
+.rr-vn-choices { display: flex; flex-direction: column; gap: 0.5em; }
+.rr-vn-choices:empty { display: none; }
+.rr-vn .rr-vn-option {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7em;
+  height: auto;
+  padding: 0.6em 1em;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  box-shadow: none;
+  color: #fff;
+  font: inherit;
+  text-align: left;
+  white-space: normal;
+  cursor: pointer;
+}
+.rr-vn .rr-vn-option:hover { border-color: rgba(255, 255, 255, 0.85); }
+.rr-vn-option-num {
+  flex: none;
+  padding: 0 0.45em;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 3px;
+  font-size: 0.8em;
+}
+
+/* Stage buttons (Back, Log); hidden with the reader's bars. */
+.rr-vn-toolbar {
+  position: absolute;
+  top: 0.6em;
+  right: 0.6em;
+  z-index: 7;
+  display: flex;
+  gap: 0.4em;
+  font-size: 13px;
+}
+.rr-mobile .rr-vn-toolbar { top: calc(56px + env(safe-area-inset-top)); }
+.rr-chrome-hidden .rr-vn-toolbar { display: none; }
+.rr-vn .rr-vn-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.35em;
+  height: auto;
+  padding: 0.3em 0.7em;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.5);
+  box-shadow: none;
+  color: #fff;
+  font-size: inherit;
+  cursor: pointer;
+}
+.rr-vn .rr-vn-btn svg { width: 14px; height: 14px; }
+
+/* Log of lines read: tap one to go back to it. */
+.rr-vn-log {
+  position: absolute;
+  inset: 3em 1em 1em;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(15, 15, 15, 0.95);
+  font-size: 0.9em;
+}
+.rr-mobile .rr-vn-log { top: calc(56px + env(safe-area-inset-top)); }
+.rr-vn-log-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6em 1em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.rr-vn-log-list { flex: 1; overflow-y: auto; padding: 0 1em; user-select: text; -webkit-user-select: text; }
+.rr-vn-log-item { padding: 0.6em 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1); cursor: pointer; }
+.rr-vn-log-speaker { font-size: 0.8em; font-weight: 700; text-transform: uppercase; opacity: 0.75; }
