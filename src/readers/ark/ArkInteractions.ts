@@ -17,6 +17,8 @@ export class ArkInteractions {
   private musicEl: HTMLElement | null = null;
   private lightbox: HTMLElement | null = null;
   private autoplay = false;
+  /** Music turned off from the top bar: autoplay stays quiet (a tapped bar still plays). */
+  private musicMuted = false;
   /** The music marker autoplay last acted on (null: above the first one). */
   private autoMarker: HTMLElement | null = null;
   private autoTimer: number | null = null;
@@ -166,6 +168,14 @@ export class ArkInteractions {
 
   // --- Autoplay --------------------------------------------------------------
 
+  setMusicMuted(muted: boolean): void {
+    if (muted === this.musicMuted) return;
+    this.musicMuted = muted;
+    this.autoMarker = null; // re-evaluate the scene's music when unmuted
+    if (muted) this.stopMusic();
+    else this.syncMusic();
+  }
+
   setAutoplay(on: boolean): void {
     if (on === this.autoplay) return;
     this.autoplay = on;
@@ -196,7 +206,7 @@ export class ArkInteractions {
   /** Play the track of the last music marker above the middle of the screen. */
   syncMusic(): void {
     const scroll = this.scrollEl;
-    if (!this.autoplay || !scroll) return;
+    if (!this.autoplay || this.musicMuted || !scroll) return;
     const line = scroll.getBoundingClientRect().top + scroll.clientHeight / 2;
     let current: HTMLElement | null = null;
     for (const marker of Array.from(this.contentEl.querySelectorAll<HTMLElement>(MUSIC_MARKERS))) {

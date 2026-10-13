@@ -283,10 +283,12 @@ export class EpubReader implements Reader {
     }
     this.anchorViewTop = viewTop;
     // Above the first block (top of the book): anchor to it with a negative offset.
+    // No upper cap: the view can sit past the block's end, over content that
+    // isn't anchored (a story's branch lines), and must come back there.
     const b = this.blocks[Math.max(0, found)];
     const rect = b.el.getBoundingClientRect();
     const raw = rect.height > 0 ? (viewTop - rect.top) / rect.height : 0;
-    const offset = found < 0 ? Math.min(0, raw) : Math.max(0, Math.min(1, raw));
+    const offset = found < 0 ? Math.min(0, raw) : Math.max(0, raw);
     return { chapter: b.chapter, block: b.index, offset };
   }
 

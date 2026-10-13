@@ -44,6 +44,8 @@ export interface PluginSettings {
   storyDefaultView: StoryView;
   /** Visual-novel view: letters per second for typed-out lines; 0 shows lines at once. */
   storyTextSpeed: number;
+  /** Story music off (the top-bar speaker button); sound effects still play. */
+  storyMusicMuted: boolean;
   /** Group the library by folder (vs. one flat grid). */
   libraryGroupByFolder: boolean;
   /** Library section keys (folder paths / "__recent" / "__all") collapsed by the user. */
@@ -77,6 +79,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   storyAutoplayMusic: true,
   storyDefaultView: 'script',
   storyTextSpeed: 0,
+  storyMusicMuted: false,
   libraryGroupByFolder: true,
   libraryCollapsed: [],
   libraryTab: 'books',

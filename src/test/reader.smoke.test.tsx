@@ -162,6 +162,17 @@ describe('reader frame', () => {
     expect(calls).toContain('navigate 1');
   });
 
+  it('stories get view-switch and music buttons; the music button toggles the setting', () => {
+    const { host, store, settings } = setup();
+    expect($('[aria-label="Turn music off"]', host)).toBeNull(); // not a story
+    act(() => store.setState({ storyView: 'script' }));
+    expect($('[aria-label="Switch to visual-novel view"]', host)).not.toBeNull();
+    act(() => $('[aria-label="Turn music off"]', host)!.click());
+    expect(settings.getState().settings.storyMusicMuted).toBe(true);
+    act(() => $('[aria-label="Turn music on"]', host)!.click());
+    expect(settings.getState().settings.storyMusicMuted).toBe(false);
+  });
+
   it('chapter label follows the store', () => {
     const { host, store } = setup();
     expect($('.rr-topbar-title', host)!.textContent).toBe('Long Mock Novel');

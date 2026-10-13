@@ -6,6 +6,8 @@ export interface VnOptions {
   nickname: string;
   /** Letters per second for typed-out text; 0 shows each line at once. */
   textSpeed: number;
+  /** Music off (sound effects still play). */
+  musicMuted: boolean;
   /** Center tap: show or hide the reader's bars. */
   onToggleChrome: () => void;
   /** A frame is shown (keeps the script view's position in step). */
@@ -110,8 +112,10 @@ export class VnPlayer {
     this.root.focus({ preventScroll: true });
   }
 
-  setOptions(patch: Partial<Pick<VnOptions, 'nickname' | 'textSpeed'>>): void {
+  setOptions(patch: Partial<Pick<VnOptions, 'nickname' | 'textSpeed' | 'musicMuted'>>): void {
+    const mutedChanged = patch.musicMuted !== undefined && patch.musicMuted !== this.opts.musicMuted;
     Object.assign(this.opts, patch);
+    if (mutedChanged) this.setMusic(this.current()?.stage.music ?? null);
   }
 
   /** Tap: finish the typing line, else go to the next frame. */
@@ -277,6 +281,7 @@ export class VnPlayer {
   // --- Audio -----------------------------------------------------------------
 
   private setMusic(id: string | null): void {
+    if (this.opts.musicMuted) id = null;
     if ((this.music?.id ?? null) === id) return;
     this.music?.audio.pause();
     this.music = null;

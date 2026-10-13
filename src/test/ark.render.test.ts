@@ -169,15 +169,24 @@ describe('ark story interactions', () => {
     expect(played.map((a) => a.src)).toEqual(['app://media/music:$babel_loop']);
     expect(played[0].paused).toBe(false);
 
+    // Music off from the top bar: stops now and stays quiet; on again resumes the scene's track.
+    ark.setMusicMuted(true);
+    expect(played[0].paused).toBe(true);
+    ark.syncMusic();
+    expect(played).toHaveLength(1);
+    ark.setMusicMuted(false);
+    expect(played.map((a) => a.src)).toEqual(['app://media/music:$babel_loop', 'app://media/music:$babel_loop']);
+    expect(played[1].paused).toBe(false);
+
     height = 1200; // line at 600: past the stop marker
     ark.syncMusic();
-    expect(played[0].paused).toBe(true);
+    expect(played[1].paused).toBe(true);
 
     height = 2000; // line at 1000: the ekg bar, which is missing
     Notice.messages.length = 0;
     ark.syncMusic();
     expect(Notice.messages).toEqual(['Track not available: ekg']);
-    expect(played).toHaveLength(1);
+    expect(played).toHaveLength(2);
 
     ark.setAutoplay(false);
     ark.destroy();

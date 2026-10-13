@@ -184,6 +184,7 @@ export class ReaderView extends FileView implements ReaderHost {
       this.story = story;
       this.ark = new ArkInteractions(contentEl, reader.getScrollEl());
       this.ark.setNickname(settings.storyNickname);
+      this.ark.setMusicMuted(settings.storyMusicMuted);
       this.ark.setAutoplay(settings.storyAutoplayMusic);
       store.setState({ storyView: 'script' });
       if (settings.storyDefaultView === 'vn') this.enterVn();
@@ -287,6 +288,7 @@ export class ReaderView extends FileView implements ReaderHost {
       {
         nickname: settings.storyNickname,
         textSpeed: settings.storyTextSpeed,
+        musicMuted: settings.storyMusicMuted,
         onToggleChrome: () => this.toggleChrome(),
         onFrame: (frame) => ark.scrollToSegment(frame.key),
         onChoose: (chapter, choice, value) => ark.selectChoice(chapter, choice, value),
@@ -481,7 +483,9 @@ export class ReaderView extends FileView implements ReaderHost {
   refreshSettings(): void {
     this.reader?.applySettings(this.plugin.settings);
     this.ark?.setNickname(this.plugin.settings.storyNickname);
-    this.ark?.setAutoplay(this.plugin.settings.storyAutoplayMusic && !this.vn);
-    this.vn?.setOptions({ nickname: this.plugin.settings.storyNickname, textSpeed: this.plugin.settings.storyTextSpeed });
+    const s = this.plugin.settings;
+    this.ark?.setMusicMuted(s.storyMusicMuted);
+    this.ark?.setAutoplay(s.storyAutoplayMusic && !this.vn);
+    this.vn?.setOptions({ nickname: s.storyNickname, textSpeed: s.storyTextSpeed, musicMuted: s.storyMusicMuted });
   }
 }

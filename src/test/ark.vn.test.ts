@@ -106,12 +106,22 @@ describe('visual-novel player', () => {
   });
 
   function mount() {
+    const audio: { src: string; paused: boolean }[] = [];
     vi.stubGlobal(
       'Audio',
       class {
         loop = false;
-        play = () => Promise.resolve();
-        pause = () => {};
+        paused = true;
+        constructor(public src: string) {
+          audio.push(this);
+        }
+        play = () => {
+          this.paused = false;
+          return Promise.resolve();
+        };
+        pause = () => {
+          this.paused = true;
+        };
       },
     );
     const host = document.body.createDiv();
@@ -124,6 +134,7 @@ describe('visual-novel player', () => {
       {
         nickname: 'Doctor',
         textSpeed: 0,
+        musicMuted: false,
         onToggleChrome: () => shown.push('chrome'),
         onFrame: (f) => shown.push(f.key),
         onChoose: (c, n, v) => chosen.push(`${c}:${n}=${v}`),
@@ -135,8 +146,23 @@ describe('visual-novel player', () => {
     const tap = (x: number, y: number): void => {
       root.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: x, clientY: y }));
     };
-    return { player, root, shown, chosen, tap };
+    return { player, root, shown, chosen, tap, audio };
   }
+
+  it('music off stops the track and keeps it off; on resumes the scene\'s track', () => {
+    const { player, tap, audio } = mount();
+    player.start(null);
+    tap(90, 90); // first line: babel music playing
+    const music = () => audio.filter((a) => a.src.includes('music:') && !a.paused).map((a) => a.src);
+    expect(music()).toEqual(['app://music:$babel_loop']);
+    player.setOptions({ musicMuted: true });
+    expect(music()).toEqual([]);
+    tap(90, 90); // still off on the next line
+    expect(music()).toEqual([]);
+    expect(audio.some((a) => a.src.includes('sounds:') && !a.paused)).toBe(true); // effects still play
+    player.setOptions({ musicMuted: false });
+    expect(music()).toEqual(['app://music:$babel_loop']);
+  });
 
   it('taps: right/bottom continues, top/left goes back, center toggles the bars', () => {
     const { player, root, shown, tap } = mount();

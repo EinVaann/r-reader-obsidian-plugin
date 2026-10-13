@@ -65,6 +65,7 @@ function TopBar({ title }: { title: string }) {
   const label = useReader((s) => s.chapterLabel) || title;
   const panel = useReader((s) => s.panel);
   const storyView = useReader((s) => s.storyView);
+  const musicMuted = useSettings((s) => s.storyMusicMuted);
   const toggle = (p: Exclude<ReaderPanel, null>): void => actions.setPanel(panel === p ? null : p);
 
   return (
@@ -80,6 +81,15 @@ function TopBar({ title }: { title: string }) {
           onClick={() => actions.toggleStoryView()}
         >
           <Icon name={storyView === 'vn' ? 'scroll-text' : 'clapperboard'} />
+        </button>
+      )}
+      {storyView && (
+        <button
+          className="rr-iconbtn clickable-icon rr-keep-mobile"
+          aria-label={musicMuted ? 'Turn music on' : 'Turn music off'}
+          onClick={() => actions.updateSettings({ storyMusicMuted: !musicMuted })}
+        >
+          <Icon name={musicMuted ? 'volume-x' : 'volume-2'} />
         </button>
       )}
       <button className="rr-iconbtn clickable-icon rr-keep-mobile" aria-label="Table of contents" {...{ [PANEL_TOGGLE]: '' }} onClick={() => toggle('toc')}>

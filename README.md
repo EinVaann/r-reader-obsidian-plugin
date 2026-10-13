@@ -53,7 +53,8 @@ Images and audio live in a separate **assets folder** shared by every story, hol
   shows or hides the bars. *Log* lists the lines read; tap one to go back to it.
 - **Choices**: the first option is shown; tap another to read its branch instead.
 - **Music**: in the script view it plays as you scroll to each scene (turn off *Autoplay
-  music* to play only on tap); the stage plays it as the script says.
+  music* to play only on tap); the stage plays it as the script says. The speaker button in
+  the top bar turns music off (and on) in both views; sound effects keep playing.
 - **Images**: in the script view, tap a scene image or portrait to see it full size.
 - `{@nickname}` in the script uses the *Nickname* setting (default "Doctor").
 - Highlights are off for stories; bookmarks, search and progress work as in EPUBs.
