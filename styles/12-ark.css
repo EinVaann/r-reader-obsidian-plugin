@@ -1,0 +1,152 @@
+/* ---- .ark stories (Distant Homes): script view with scene art, portraits, choices, audio ---- */
+.rr-ark-chapter {
+  /* Tints of the reader theme's text color, so stories follow the active theme. */
+  --rr-ark-accent: color-mix(in srgb, currentColor 55%, transparent);
+  --rr-ark-panel: color-mix(in srgb, currentColor 7%, transparent);
+  --rr-ark-choice-bg: color-mix(in srgb, currentColor 10%, transparent);
+  font-family: var(--rr-font-family);
+}
+
+.rr-ark-head {
+  border-bottom: 1px solid color-mix(in srgb, var(--rr-ark-accent) 45%, transparent);
+  padding-bottom: 1em;
+  margin-bottom: 1.5em;
+}
+.rr-epub-content .rr-ark-title {
+  font-family: Libron, Georgia, serif;
+  font-size: 1.6em;
+  font-weight: 600;
+  text-transform: lowercase;
+  margin: 0 0 0.3em;
+}
+.rr-epub-content .rr-ark-tag,
+.rr-epub-content .rr-ark-node {
+  font-style: italic;
+  font-size: 0.85em;
+  font-weight: 400;
+  opacity: 0.7;
+  margin: 0;
+}
+.rr-ark-node {
+  border-top: 1px solid color-mix(in srgb, var(--rr-ark-accent) 45%, transparent);
+  padding-top: 1em;
+  margin: 2em 0 1.5em !important;
+}
+
+/* Music bar and scene art. */
+.rr-ark-music {
+  background: var(--rr-ark-panel);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 0.8em 1em;
+  margin: 1.2em 0;
+  cursor: pointer;
+}
+.rr-ark-music.is-playing { border-color: var(--rr-ark-accent); }
+.rr-ark-music code { background: none; padding: 0; font-size: 0.9em; }
+.rr-ark-note { margin-right: 0.4em; }
+.rr-ark-scene { margin: 1.2em 0; }
+.rr-ark-scene img {
+  display: block;
+  width: 100%;
+  border-radius: 10px;
+}
+
+/* Dialogue: speaker + line on the left, portraits on the right. */
+.rr-ark-line {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  column-gap: 0.8em;
+  margin: 0 0 0.9em;
+}
+.rr-ark-line > p { grid-column: 1; margin: 0; }
+.rr-epub-content .rr-ark-speaker { font-weight: 700; margin: 0 0 0.15em; }
+.rr-ark-portraits {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  display: flex;
+  gap: 0.3em;
+  align-self: center;
+}
+.rr-ark-portrait {
+  position: relative;
+  width: 2.8em;
+  height: 2.8em;
+  border-radius: 50%;
+  border: 2px solid var(--rr-ark-accent);
+  overflow: hidden;
+  background: var(--rr-ark-panel);
+  flex: none;
+}
+.rr-ark-portrait.is-dim { opacity: 0.35; }
+/* Sprites are full-body 512px art with the head near the top: zoom in on it. */
+.rr-epub-content .rr-ark-portrait img {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 340%;
+  max-width: none !important;
+  height: auto !important;
+  transform: translate(-50%, -6.5%);
+}
+
+.rr-epub-content .rr-ark-narration {
+  font-style: italic;
+  text-align: center;
+  opacity: 0.8;
+  margin: 1em 0;
+}
+
+/* Sound effects: a small round play button. */
+.rr-ark-sfx { display: flex; justify-content: center; margin: 0.4em 0; }
+.rr-ark-sfx-btn {
+  width: 1.6em;
+  height: 1.6em;
+  border-radius: 50%;
+  border: 1.5px solid var(--rr-ark-accent);
+  opacity: 0.7;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.rr-ark-sfx-btn::before { content: '\25B6'; font-size: 0.55em; margin-left: 0.15em; }
+.rr-ark-sfx-btn:hover { opacity: 1; }
+
+/* Choices: the selected option's branch is shown, the others hidden. */
+.rr-ark-choice { margin: 0 0 0.9em; }
+.rr-epub-content .rr-ark-option {
+  border: 2px solid color-mix(in srgb, var(--rr-ark-accent) 45%, transparent);
+  border-radius: 6px;
+  padding: 0.5em 0.8em;
+  margin: 0.35em 0;
+  font-weight: 600;
+  cursor: pointer;
+  opacity: 0.65;
+}
+.rr-epub-content .rr-ark-option.is-selected {
+  border-color: var(--rr-ark-accent);
+  background: var(--rr-ark-choice-bg);
+  opacity: 1;
+}
+.rr-ark-branch.is-hidden { display: none; }
+
+/* Tap a scene image or portrait to see it full size. */
+.rr-ark-scene img,
+.rr-ark-portrait { cursor: zoom-in; }
+.rr-ark-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: var(--layer-modal, 50);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  background: var(--background-modifier-cover);
+  cursor: zoom-out;
+}
+.rr-ark-lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}

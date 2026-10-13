@@ -5,7 +5,7 @@ continuous scrolling, highlight and annotate text, bookmark your place, search i
 the book, and browse your library with covers. Everything lives in your vault and syncs
 across devices.
 
-> EPUB only. PDF and other formats are intentionally out of scope.
+> EPUBs, plus `.ark` story scripts (see below). PDF and other formats are intentionally out of scope.
 
 ---
 
@@ -33,6 +33,24 @@ across devices.
   instant. First open is progressive: early chapters become readable while the rest builds.
 - **Cross-device visibility** — EPUB files show up on every device automatically (the plugin
   enables Obsidian's "Detect all file extensions" via its own synced setting).
+- **`.ark` stories** — game story scripts read as a script: scene art, speakers with round
+  portraits, music bars, sound buttons, and choices that reveal their own branch.
+
+---
+
+## `.ark` stories
+
+An `.ark` file is one story (JSON with `"format": "ark"`) holding its chapters in order.
+Images and audio live in a separate **assets folder** shared by every story, holding
+`media.json` (media ID → file) and the media files. Point the reader at it with the
+*Story assets folder* setting.
+
+- **Choices**: the first option is shown; tap another to read its branch instead.
+- **Music**: plays as you scroll to each scene (turn off *Autoplay story music* to play
+  only on tap); tap a playing bar to stop it. Sound effects play on tap.
+- **Images**: tap a scene image or portrait to see it full size.
+- `{@nickname}` in the script uses the *Story nickname* setting (default "Doctor").
+- Highlights are off for stories; bookmarks, search and progress work as in EPUBs.
 
 ---
 
@@ -95,6 +113,9 @@ Updates: BRAT can auto-update, or use *Check for updates* in BRAT.
 | Show EPUB files on all devices | Auto-enables "Detect all file extensions" |
 | Touch-to-scroll / Hide bars on mobile | Mobile reading controls |
 | Clear EPUB cache | Drop the in-memory render cache |
+| Story nickname | Name used for `{@nickname}` in `.ark` stories |
+| Story assets folder | Folder with `media.json` and media for `.ark` stories |
+| Autoplay story music | Play each scene's music while scrolling a story |
 
 ---
 

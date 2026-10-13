@@ -11,8 +11,9 @@ import '../ce-guard';
 // (no iframes) for true whole-book continuous scrolling with no CSP issues.
 import { makeBook } from '../vendor/foliate-js/view.js';
 
-interface FoliateSection {
-  load: () => Promise<string>; // blob: URL to resolved XHTML (avoided on mobile)
+/** One renderable section; foliate's EPUB sections, or story chapters (`.ark`). */
+export interface FoliateSection {
+  load?: () => Promise<string>; // blob: URL to resolved XHTML (avoided on mobile)
   unload?: () => void;
   createDocument: () => Promise<Document>;
   resolveHref?: (href: string) => string;
@@ -24,7 +25,7 @@ interface FoliateTocItem {
   href?: string;
   subitems?: FoliateTocItem[] | null;
 }
-interface FoliateBook {
+export interface FoliateBook {
   sections: FoliateSection[];
   toc?: FoliateTocItem[] | null;
   metadata?: { title?: string };
@@ -153,13 +154,18 @@ export class EpubReader implements Reader {
 
   async mount(fileArrayBuffer: ArrayBuffer): Promise<void> {
     this.host.setLoading(true);
-    this.container.addClass('rr-epub-container');
-
     // foliate's makeBook reads file.name to detect format, so pass a File.
     const name = this.filePath.split('/').pop() || 'book.epub';
     const file = new File([fileArrayBuffer], name, { type: 'application/epub+zip' });
     const book = (await makeBook(file)) as FoliateBook;
     if (this.destroyed) return;
+    await this.mountBook(book);
+  }
+
+  /** Render an already-built book (an EPUB from foliate, or a `.ark` story). */
+  async mountBook(book: FoliateBook): Promise<void> {
+    this.host.setLoading(true);
+    this.container.addClass('rr-epub-container');
     this.book = book;
     // Render every spine section so chapter data-index aligns with the indices
     // returned by book.resolveHref (used by the TOC picker).
@@ -252,7 +258,8 @@ export class EpubReader implements Reader {
     this.chapterEls.push(chapter);
     this.applyHighlights(this.initialHighlights.filter((h) => h.chapterIndex === ci));
     this.chapterBlockStart.set(ci, this.blocks.length);
-    const els = chapter.querySelectorAll<HTMLElement>(BLOCK_SELECTOR);
+    // Story branch lines can be hidden (zero rect), which would break the anchor search.
+    const els = Array.from(chapter.querySelectorAll<HTMLElement>(BLOCK_SELECTOR)).filter((el) => !el.closest('.rr-ark-branch'));
     els.forEach((el, index) => this.blocks.push({ el, chapter: ci, index }));
   }
 

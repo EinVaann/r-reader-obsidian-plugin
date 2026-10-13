@@ -32,6 +32,12 @@ export interface PluginSettings {
   notesExportFolder: string;
   /** Default color used when creating a highlight. */
   defaultHighlightColor: HighlightColor;
+  /** Name shown for {@nickname} in `.ark` stories. */
+  storyNickname: string;
+  /** Vault folder with the stories' shared `media.json` and media files. */
+  storyAssetsFolder: string;
+  /** In `.ark` stories, play the music of the scene being read while scrolling. */
+  storyAutoplayMusic: boolean;
   /** Group the library by folder (vs. one flat grid). */
   libraryGroupByFolder: boolean;
   /** Library section keys (folder paths / "__recent" / "__all") collapsed by the user. */
@@ -58,6 +64,9 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   closeMenuAfterTocJump: true,
   notesExportFolder: 'R Reader Notes',
   defaultHighlightColor: 'yellow',
+  storyNickname: 'Doctor',
+  storyAssetsFolder: 'Arknights Story Assets',
+  storyAutoplayMusic: true,
   libraryGroupByFolder: true,
   libraryCollapsed: [],
   themeMigratedToObsidian: true,

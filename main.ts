@@ -60,7 +60,7 @@ export default class RReaderPlugin extends Plugin {
 
     this.registerView(READER_VIEW_TYPE, (leaf) => new ReaderView(leaf, this));
     this.registerView(LIBRARY_VIEW_TYPE, (leaf) => new LibraryView(leaf, this));
-    this.registerExtensions(['epub'], READER_VIEW_TYPE);
+    this.registerExtensions(['epub', 'ark'], READER_VIEW_TYPE);
     this.applyFileVisibility();
 
     // "ResizeObserver loop completed with undelivered notifications" is a benign

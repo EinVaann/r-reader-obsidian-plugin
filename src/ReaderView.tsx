@@ -1,6 +1,8 @@
 import { FileView, Notice, Platform, TFile, WorkspaceLeaf } from 'obsidian';
 import type RReaderPlugin from '../main';
-import { EpubReader } from './readers/EpubReader';
+import { EpubReader, type FoliateBook } from './readers/EpubReader';
+import { openArkBook } from './readers/ark/arkBook';
+import { ArkInteractions } from './readers/ark/ArkInteractions';
 import { MobileControls } from './mobile/MobileControls';
 import { makeId } from './annotations/AnnotationManager';
 import type { Highlight } from './annotations/types';
@@ -14,6 +16,8 @@ import { ReaderContext, type HighlightActions, type ReaderActions, type ReaderCo
 import { ReaderApp } from './reader/ReaderApp';
 
 export const READER_VIEW_TYPE = 'r-reader-view';
+
+const isArk = (file: TFile): boolean => file.extension.toLowerCase() === 'ark';
 
 /**
  * A reader pane. Obsidian side only: it owns the EpubReader (which renders the
@@ -30,6 +34,10 @@ export class ReaderView extends FileView implements ReaderHost {
   /** The element the current book is mounted in (guards double mounts). */
   private bookEl: HTMLElement | null = null;
   private highlightClick: ((id: string, el: HTMLElement) => void) | null = null;
+  /** Choice / audio handling for an open `.ark` story. */
+  private ark: ArkInteractions | null = null;
+  /** Tab title from the book's metadata, when it beats the file name. */
+  private bookTitle: string | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: RReaderPlugin) {
     super(leaf);
@@ -41,7 +49,7 @@ export class ReaderView extends FileView implements ReaderHost {
   }
 
   getDisplayText(): string {
-    return this.file?.basename ?? 'R Reader';
+    return this.bookTitle ?? this.file?.basename ?? 'R Reader';
   }
 
   async onOpen(): Promise<void> {
@@ -119,15 +127,26 @@ export class ReaderView extends FileView implements ReaderHost {
   private async openBook(file: TFile, contentArea: HTMLElement, bookEl: HTMLElement): Promise<void> {
     const store = this.store;
     if (!store) return;
-    if (file.extension.toLowerCase() !== 'epub') {
+    const ext = file.extension.toLowerCase();
+    if (ext !== 'epub' && ext !== 'ark') {
       store.setState({ loading: false, error: `Unsupported format: .${file.extension}` });
       return;
     }
 
-    const data = await this.app.vault.readBinary(file);
+    const { settings } = this.plugin;
+    let source: ArrayBuffer | FoliateBook;
+    try {
+      source =
+        ext === 'ark'
+          ? await openArkBook(this.app, file, { nickname: settings.storyNickname, assetsFolder: settings.storyAssetsFolder })
+          : await this.app.vault.readBinary(file);
+    } catch (e) {
+      store.setState({ loading: false, error: `Failed to open .${ext}:\n${e instanceof Error ? e.message : String(e)}` });
+      console.error('R Reader: open failed', e);
+      return;
+    }
     if (this.store !== store) return; // switched to another file meanwhile
 
-    const { settings } = this.plugin;
     const reader = new EpubReader(
       bookEl,
       file.path,
@@ -136,18 +155,28 @@ export class ReaderView extends FileView implements ReaderHost {
       this,
       this.plugin.epubCache,
       file.stat.mtime,
-      this.plugin.annotationManager.get(file.path).highlights,
+      isArk(file) ? [] : this.plugin.annotationManager.get(file.path).highlights,
     );
     this.reader = reader;
     try {
-      await reader.mount(data);
+      await (source instanceof ArrayBuffer ? reader.mount(source) : reader.mountBook(source));
     } catch (e) {
       const msg = e instanceof Error ? `${e.message}\n${e.stack ?? ''}` : String(e);
-      store.setState({ loading: false, error: `Failed to open EPUB:\n${msg}` });
+      store.setState({ loading: false, error: `Failed to open .${ext}:\n${msg}` });
       console.error('R Reader: mount failed', e);
       return;
     }
     if (this.store !== store) return;
+
+    const contentEl = reader.getContentEl();
+    if (ext === 'ark' && contentEl) {
+      this.ark = new ArkInteractions(contentEl, reader.getScrollEl());
+      this.ark.setNickname(settings.storyNickname);
+      this.ark.setAutoplay(settings.storyAutoplayMusic);
+    }
+    // Stories are named by their manifest ("manifest.ark"); show the story title instead.
+    this.bookTitle = ext === 'ark' ? reader.getMetadata()?.title ?? null : null;
+    if (this.bookTitle) (this.leaf as unknown as { updateHeader?: () => void }).updateHeader?.();
 
     reader.onHighlightClick = (id, el) => this.highlightClick?.(id, el);
     store.setState({ ready: true });
@@ -169,6 +198,9 @@ export class ReaderView extends FileView implements ReaderHost {
     document.body.removeClass('rr-immersive');
     this.unsubscribe?.();
     this.unsubscribe = null;
+    this.ark?.destroy();
+    this.ark = null;
+    this.bookTitle = null;
     this.reader?.destroy();
     this.reader = null;
     this.mobile?.unmount();
@@ -222,8 +254,10 @@ export class ReaderView extends FileView implements ReaderHost {
   private makeHighlightActions(file: TFile): HighlightActions {
     const path = file.path;
     const notes = this.plugin.annotationManager;
+    // No content element means no selection toolbar: stories (.ark) aren't highlightable.
+    const highlightable = !isArk(file);
     return {
-      getContentEl: () => this.reader?.getContentEl() ?? null,
+      getContentEl: () => (highlightable ? this.reader?.getContentEl() ?? null : null),
       captureSelection: () => this.reader?.captureCurrentSelection() ?? null,
       getHighlight: (id) => notes.get(path).highlights.find((h) => h.id === id),
       create: (anchor, color) => {
@@ -378,5 +412,7 @@ export class ReaderView extends FileView implements ReaderHost {
   /** Called by the plugin when settings change; the reader re-themes live. */
   refreshSettings(): void {
     this.reader?.applySettings(this.plugin.settings);
+    this.ark?.setNickname(this.plugin.settings.storyNickname);
+    this.ark?.setAutoplay(this.plugin.settings.storyAutoplayMusic);
   }
 }

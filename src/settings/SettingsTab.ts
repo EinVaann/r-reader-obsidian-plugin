@@ -200,6 +200,42 @@ export class RReaderSettingsTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName('Story nickname')
+      .setDesc('Your name in .ark stories, wherever the script addresses the Doctor by name.')
+      .addText((t) =>
+        t
+          .setPlaceholder('Doctor')
+          .setValue(this.plugin.settings.storyNickname)
+          .onChange(async (v) => {
+            this.plugin.settings.storyNickname = v.trim() || 'Doctor';
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Story assets folder')
+      .setDesc('Vault folder holding media.json and the images and audio .ark stories use. Reopen a story after changing it.')
+      .addText((t) =>
+        t
+          .setPlaceholder('Arknights Story Assets')
+          .setValue(this.plugin.settings.storyAssetsFolder)
+          .onChange(async (v) => {
+            this.plugin.settings.storyAssetsFolder = v.trim().replace(/\/+$/, '');
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Autoplay story music')
+      .setDesc('In .ark stories, play each scene\'s music as you scroll to it. Off: tap a music bar to play it.')
+      .addToggle((t) =>
+        t.setValue(this.plugin.settings.storyAutoplayMusic).onChange(async (v) => {
+          this.plugin.settings.storyAutoplayMusic = v;
+          await this.plugin.saveSettings();
+        }),
+      );
+
+    new Setting(containerEl)
       .setName('Clear EPUB cache')
       .setDesc('Books are cached in memory after the first load so re-opening them is instant. Clear this if a book looks wrong or after toggling no-image mode.')
       .addButton((b) =>
