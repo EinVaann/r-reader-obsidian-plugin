@@ -230,6 +230,7 @@ export class RReaderSettingsTab extends PluginSettingTab {
           .setValue(this.plugin.settings.storyAssetsFolder)
           .onChange(async (v) => {
             this.plugin.settings.storyAssetsFolder = v.trim().replace(/\/+$/, '');
+            this.plugin.clearStoryCache();
             await this.plugin.saveSettings();
           }),
       );

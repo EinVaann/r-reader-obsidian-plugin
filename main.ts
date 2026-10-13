@@ -221,6 +221,13 @@ export default class RReaderPlugin extends Plugin {
     this.epubCache.clear();
   }
 
+  /** Drop rendered `.ark` stories; their media links depend on the assets folder setting. */
+  clearStoryCache(): void {
+    for (const path of [...this.epubCache.keys()]) {
+      if (path.toLowerCase().endsWith('.ark')) this.epubCache.delete(path);
+    }
+  }
+
   /**
    * Apply Obsidian's "Detect all file extensions" (vault config
    * `showUnsupportedFiles`) so EPUB files are visible in the file explorer.
