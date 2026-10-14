@@ -32,6 +32,8 @@ export interface PluginSettings {
   closeMenuAfterTocJump: boolean;
   /** Vault folder where exported reading notes are written. */
   notesExportFolder: string;
+  /** Vault file holding reading progress, highlights and bookmarks; '' = the plugin's data.json. */
+  readingDataPath: string;
   /** Default color used when creating a highlight. */
   defaultHighlightColor: HighlightColor;
   /** Name shown for {@nickname} in `.ark` stories. */
@@ -73,6 +75,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   noImageMode: false,
   closeMenuAfterTocJump: true,
   notesExportFolder: 'R Reader Notes',
+  readingDataPath: '',
   defaultHighlightColor: 'yellow',
   storyNickname: 'Doctor',
   storyAssetsFolder: 'Arknights Story Assets',

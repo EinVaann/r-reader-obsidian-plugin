@@ -2,21 +2,25 @@ import { Notice, Plugin, WorkspaceLeaf } from 'obsidian';
 import { READER_VIEW_TYPE, ReaderView } from './src/ReaderView';
 import { RReaderSettingsTab } from './src/settings/SettingsTab';
 import { DEFAULT_SETTINGS, type PluginSettings, type Theme } from './src/settings/settings';
-import { ProgressManager, type ReadingAnchor } from './src/reading-progress/ProgressManager';
+import { ProgressManager } from './src/reading-progress/ProgressManager';
 import { AnnotationManager } from './src/annotations/AnnotationManager';
-import type { BookAnnotations, HighlightColor } from './src/annotations/types';
+import type { HighlightColor } from './src/annotations/types';
 import { HIGHLIGHT_COLORS } from './src/annotations/types';
 import { LIBRARY_VIEW_TYPE, LibraryView } from './src/library/LibraryView';
 import { CoverCache } from './src/library/CoverCache';
 import type { EpubCacheEntry } from './src/readers/EpubReader';
 import { createSettingsStore, type SettingsStore } from './src/reader/store';
+import {
+  type ReadingData,
+  emptyReadingData,
+  mergeReadingData,
+  normalizeDataPath,
+  readingDataFrom,
+} from './src/reading-progress/readingData';
 
-interface RReaderData {
+/** data.json. The reading data is left out when it lives in a vault file instead. */
+interface RReaderData extends Partial<ReadingData> {
   settings?: Partial<PluginSettings>;
-  progress?: Record<string, string | number>;
-  lastRead?: Record<string, number>;
-  anchors?: Record<string, ReadingAnchor>;
-  annotations?: Record<string, BookAnnotations>;
 }
 
 export default class RReaderPlugin extends Plugin {
@@ -29,16 +33,16 @@ export default class RReaderPlugin extends Plugin {
   coverCache = new CoverCache(this);
   /** Settings mirrored for the React UI; refreshed by every saveSettings(). */
   settingsStore!: SettingsStore;
+  /** Writes queued one after another, so an older snapshot never lands last. */
+  private writeChain: Promise<void> = Promise.resolve();
 
   async onload(): Promise<void> {
-    // Settings and reading progress share one data.json. Read both from a
-    // single { settings, progress } object (with migration from older shapes
-    // where one or the other was stored at the top level).
+    // Settings always live in data.json. Reading progress and annotations sit
+    // beside them there by default, or in the vault file `readingDataPath`
+    // names. (Very old installs stored the settings at the top level.)
     const raw = (await this.loadData()) as (RReaderData & Partial<PluginSettings>) | null;
     const settingsData: Partial<PluginSettings> = raw?.settings
       ?? (raw && 'theme' in raw ? (raw as Partial<PluginSettings>) : {});
-    const progressData = raw?.progress ?? {};
-    const lastReadData = raw?.lastRead ?? {};
 
     this.settings = Object.assign({}, DEFAULT_SETTINGS, settingsData);
     // One-time move off the old hard-coded 'dark' default: existing vaults that
@@ -53,10 +57,11 @@ export default class RReaderPlugin extends Plugin {
       this.settings.progressMigratedToRight = true;
     }
     this.settingsStore = createSettingsStore(this.settings);
+    this.settings.readingDataPath = normalizeDataPath(this.settings.readingDataPath);
+    const reading = await this.loadReadingData(raw);
     this.progressManager = new ProgressManager(this);
-    this.progressManager.load(progressData, lastReadData, raw?.anchors ?? {});
     this.annotationManager = new AnnotationManager(this);
-    this.annotationManager.load(raw?.annotations ?? {});
+    this.useReadingData(reading);
 
     this.registerView(READER_VIEW_TYPE, (leaf) => new ReaderView(leaf, this));
     this.registerView(LIBRARY_VIEW_TYPE, (leaf) => new LibraryView(leaf, this));
@@ -247,16 +252,93 @@ export default class RReaderPlugin extends Plugin {
     }
   }
 
-  /** Persist settings, reading progress, and annotations together. */
-  async persist(): Promise<void> {
-    const data: RReaderData = {
-      settings: this.settings,
+  /** Persist settings, reading progress, and annotations (each to where it lives). */
+  persist(): Promise<void> {
+    const run = this.writeChain.then(() => this.writeAll());
+    this.writeChain = run.catch((e) => console.error('R Reader: could not save', e));
+    return run;
+  }
+
+  private async writeAll(): Promise<void> {
+    const reading = this.readingData();
+    const path = this.settings.readingDataPath;
+    if (path) {
+      // The vault file first: if it fails, data.json keeps the last good copy.
+      await this.writeVaultJson(path, reading);
+      await this.saveData({ settings: this.settings } satisfies RReaderData);
+    } else {
+      await this.saveData({ settings: this.settings, ...reading } satisfies RReaderData);
+    }
+  }
+
+  /** The in-memory reading data, as written to disk. */
+  private readingData(): ReadingData {
+    return {
       progress: this.progressManager.getAll(),
       lastRead: this.progressManager.getAllLastRead(),
       anchors: this.progressManager.getAllAnchors(),
       annotations: this.annotationManager.getAll(),
     };
-    await this.saveData(data);
+  }
+
+  private useReadingData(d: ReadingData): void {
+    this.progressManager.load(d.progress, d.lastRead, d.anchors);
+    this.annotationManager.load(d.annotations);
+  }
+
+  /**
+   * Reading data from the configured vault file, else from data.json. A file
+   * that doesn't exist yet (just configured, or not synced here) falls back to
+   * data.json, so older data carries over on the next save.
+   */
+  private async loadReadingData(raw: RReaderData | null): Promise<ReadingData> {
+    const path = this.settings.readingDataPath;
+    if (!path) return readingDataFrom(raw);
+    try {
+      return (await this.readVaultJson(path)) ?? readingDataFrom(raw);
+    } catch (e) {
+      // Keep the unreadable file aside rather than overwrite it on the next save.
+      const backup = `${path}.broken-${Date.now()}`;
+      await this.app.vault.adapter.copy(path, backup).catch(() => {});
+      console.error('R Reader: could not read reading data', e);
+      new Notice(`R Reader: ${path} could not be read; a copy was kept as ${backup}`);
+      return readingDataFrom(raw);
+    }
+  }
+
+  /** Parsed reading data from a vault file, or null if there's no file. Throws on bad JSON. */
+  private async readVaultJson(path: string): Promise<ReadingData | null> {
+    const adapter = this.app.vault.adapter;
+    if (!(await adapter.exists(path))) return null;
+    return readingDataFrom(JSON.parse(await adapter.read(path)));
+  }
+
+  private async writeVaultJson(path: string, data: ReadingData): Promise<void> {
+    const adapter = this.app.vault.adapter;
+    const dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
+    if (dir && !(await adapter.exists(dir))) await adapter.mkdir(dir);
+    await adapter.write(path, JSON.stringify(data, null, 2));
+  }
+
+  /**
+   * Move the reading data to another vault file ('' = data.json). If a file is
+   * already there (another device, an older copy), the two are merged. The old
+   * file is left as it was.
+   */
+  async setReadingDataPath(input: string): Promise<void> {
+    const path = normalizeDataPath(input);
+    if (path === this.settings.readingDataPath) return;
+    await this.writeChain;
+    // Throws on an unreadable file, before anything changes.
+    const existing = path
+      ? await this.readVaultJson(path)
+      : readingDataFrom(await this.loadData());
+    this.useReadingData(mergeReadingData(this.readingData(), existing ?? emptyReadingData()));
+    this.settings.readingDataPath = path;
+    await this.saveSettings();
+    this.app.workspace.getLeavesOfType(LIBRARY_VIEW_TYPE).forEach((leaf) => {
+      if (leaf.view instanceof LibraryView) leaf.view.render();
+    });
   }
 
   onunload(): void {

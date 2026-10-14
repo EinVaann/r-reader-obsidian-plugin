@@ -199,6 +199,8 @@ export class RReaderSettingsTab extends PluginSettingTab {
           }),
       );
 
+    this.displayReadingDataSetting(containerEl);
+
     new Setting(containerEl)
       .setName('Clear EPUB cache')
       .setDesc('Books are cached in memory after the first load so re-opening them is instant. Clear this if a book looks wrong or after toggling no-image mode.')
@@ -212,6 +214,38 @@ export class RReaderSettingsTab extends PluginSettingTab {
       );
 
     this.displayStorySettings(containerEl);
+  }
+
+  /** Where progress, highlights and bookmarks are saved; applied with a button, not per keystroke. */
+  private displayReadingDataSetting(containerEl: HTMLElement): void {
+    let draft = this.plugin.settings.readingDataPath;
+    const where = (p: string): string => (p ? p : "the plugin's data.json");
+    new Setting(containerEl)
+      .setName('Reading data file')
+      .setDesc(
+        `Vault file for reading progress, highlights and bookmarks. Leave empty to keep them in the plugin's data.json. ` +
+          `If the file already exists, its data is merged in. Currently: ${where(this.plugin.settings.readingDataPath)}.`,
+      )
+      .addText((t) =>
+        t
+          .setPlaceholder('e.g. R Reader/reading-data.json')
+          .setValue(draft)
+          .onChange((v) => {
+            draft = v;
+          }),
+      )
+      .addButton((b) =>
+        b.setButtonText('Move').onClick(async () => {
+          try {
+            await this.plugin.setReadingDataPath(draft);
+            new Notice(`R Reader: reading data now saved to ${where(this.plugin.settings.readingDataPath)}`);
+          } catch (e) {
+            console.error('R Reader: could not switch reading data file', e);
+            new Notice('R Reader: that file could not be read as reading data; nothing was changed.');
+          }
+          this.display();
+        }),
+      );
   }
 
   /** Settings that only apply to `.ark` stories, under their own heading. */

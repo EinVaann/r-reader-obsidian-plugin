@@ -114,6 +114,7 @@ Updates: BRAT can auto-update, or use *Check for updates* in BRAT.
 | Font size / Line height | Reading typography |
 | Scroll mode | Continuous (paginated reserved for future) |
 | Default highlight color | Color used when you create a highlight |
+| Reading data file | Vault file for progress, highlights and bookmarks (empty = `data.json`); *Move* merges with an existing file |
 | Notes export folder | Where *Export reading notes* writes Markdown (default `R Reader Notes`) |
 | Close menu after chapter jump | Close the TOC/menu after jumping |
 | No image mode | Render text placeholders instead of images (faster/lighter) |
@@ -139,6 +140,12 @@ Highlights, bookmarks, reading progress, and settings are all stored as structur
 the plugin's own `data.json` (inside `.obsidian/plugins/r-reader/`). Because that file syncs
 with your vault, your reading data follows you across devices. Exported notes are normal
 Markdown files in your vault.
+
+To keep reading data in a vault file instead (for example to sync it with a tool that skips
+`.obsidian/`), set **Reading data file** to a path like `R Reader/reading-data.json` and press
+*Move*. Settings stay in `data.json`. If the file already exists, the two are merged: per book
+the more recently read position wins, and highlights and bookmarks are combined. The file is
+read when the plugin loads, so reload Obsidian after it changes on another device.
 
 ---
 
