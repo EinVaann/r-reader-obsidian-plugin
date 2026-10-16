@@ -98,9 +98,9 @@ export default class RReaderPlugin extends Plugin {
     const { workspace } = this.app;
     const existing = workspace.getLeavesOfType(LIBRARY_VIEW_TYPE);
     if (existing.length > 0) {
-      // revealLeaf flashes the tab header yellow; a tab in the main area only needs activating.
-      if (existing[0].getRoot() === workspace.rootSplit) workspace.setActiveLeaf(existing[0], { focus: true });
-      else void workspace.revealLeaf(existing[0]);
+      void workspace.revealLeaf(existing[0]);
+      // revealLeaf flashes the tab header yellow (synchronously): drop it before it paints.
+      (existing[0] as WorkspaceLeaf & { tabHeaderEl?: HTMLElement }).tabHeaderEl?.removeClass('is-flashing');
       (existing[0].view as LibraryView).render();
       return;
     }
