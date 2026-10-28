@@ -1,0 +1,86 @@
+/* Approximation of Obsidian's default theme variables, so the plugin CSS renders as in the app. */
+body {
+  --font-interface: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Inter, sans-serif;
+  --font-monospace: Menlo, Consolas, monospace;
+  --font-ui-small: 13px;
+  --font-medium: 500;
+  --layer-modal: 50;
+  --interactive-accent: #7f6df2;
+  --text-on-accent: #ffffff;
+  --text-accent: #7f6df2;
+  --text-error: #e93147;
+  --background-modifier-error-hover: #e9314733;
+  --background-modifier-cover: rgba(10, 10, 10, 0.4);
+  margin: 0;
+  font-family: var(--font-interface);
+  font-size: 16px;
+}
+body.theme-light {
+  --background-primary: #ffffff;
+  --background-secondary: #f6f6f6;
+  --background-modifier-border: #e0e0e0;
+  --background-modifier-hover: rgba(0, 0, 0, 0.075);
+  --text-normal: #222222;
+  --text-muted: #5c5c5c;
+  --text-faint: #ababab;
+  --text-highlight-bg: rgba(255, 208, 0, 0.4);
+  color-scheme: light;
+}
+body.theme-dark {
+  --background-primary: #1e1e1e;
+  --background-secondary: #262626;
+  --background-modifier-border: #363636;
+  --background-modifier-hover: rgba(255, 255, 255, 0.075);
+  --text-normal: #dadada;
+  --text-muted: #b3b3b3;
+  --text-faint: #666666;
+  --text-highlight-bg: rgba(255, 208, 0, 0.4);
+  color-scheme: dark;
+}
+body {
+  background: var(--background-primary);
+  color: var(--text-normal);
+}
+#root > .workspace-leaf-content {
+  position: fixed;
+  inset: 0;
+}
+/* ReaderView makes this `position: relative`, so size it by height. */
+#root .view-content {
+  height: 100%;
+  overflow: auto;
+}
+button {
+  font: inherit;
+  color: inherit;
+  border: none;
+  background: var(--background-secondary);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.clickable-icon {
+  color: var(--text-muted);
+}
+/* The shim's Modal (same classes as R Board's harness). */
+.dev-modal-bg {
+  position: fixed;
+  inset: 0;
+  background: var(--background-modifier-cover);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+}
+.dev-modal {
+  background: var(--background-primary);
+  border-radius: 10px;
+  padding: 16px 20px;
+  max-height: 90vh;
+  overflow: auto;
+  width: min(480px, 92vw);
+}
+/* Screenshots: no caret blink or smooth scrolling. */
+* {
+  caret-color: transparent !important;
+  scroll-behavior: auto !important;
+}

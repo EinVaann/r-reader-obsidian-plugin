@@ -8,6 +8,9 @@
     "build": "node esbuild.config.mjs production",
     "build:css": "node build-css.mjs",
     "test": "vitest run",
+    "harness": "node dev/build-harness.mjs && node e2e/serve.mjs",
+    "e2e": "playwright test",
+    "e2e:update": "playwright test --update-snapshots",
     "deploy": "node esbuild.config.mjs production && cp main.js manifest.json styles.css \"/Users/anhv/Documents/Vault/.obsidian/plugins/r-reader/\""
   },
   "dependencies": {
@@ -16,6 +19,7 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@types/node": "^20.0.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
