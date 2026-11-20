@@ -4,12 +4,12 @@
  * e.g. `?view=reader&theme=sepia&mobile=1` (any plugin setting works too).
  */
 import { TFile } from 'obsidian';
-import { ReaderView } from '../src/ReaderView';
-import { LibraryView } from '../src/library/LibraryView';
-import { AnnotationManager } from '../src/annotations/AnnotationManager';
-import { ProgressManager } from '../src/reading-progress/ProgressManager';
-import { createSettingsStore, type ReaderStore, type SettingsStore } from '../src/reader/store';
-import { DEFAULT_SETTINGS, type PluginSettings } from '../src/settings/settings';
+import { ReaderView } from '@/obsidian/reader-view';
+import { LibraryView } from '@/screens/views/library/library-view';
+import { AnnotationManager } from '@/lib/annotations/annotation-manager';
+import { ProgressManager } from '@/lib/progress/progress-manager';
+import { createSettingsStore, type ReaderStore, type SettingsStore } from '@/stores/reader-store';
+import { DEFAULT_SETTINGS, type PluginSettings } from '@/lib/settings';
 
 interface HarnessPlugin {
   settings: PluginSettings;

@@ -1,22 +1,22 @@
 import { Notice, Plugin, WorkspaceLeaf } from 'obsidian';
-import { READER_VIEW_TYPE, ReaderView } from './src/ReaderView';
-import { RReaderSettingsTab } from './src/settings/SettingsTab';
-import { DEFAULT_SETTINGS, type PluginSettings, type Theme } from './src/settings/settings';
-import { ProgressManager } from './src/reading-progress/ProgressManager';
-import { AnnotationManager } from './src/annotations/AnnotationManager';
-import type { HighlightColor } from './src/annotations/types';
-import { HIGHLIGHT_COLORS } from './src/annotations/types';
-import { LIBRARY_VIEW_TYPE, LibraryView } from './src/library/LibraryView';
-import { CoverCache } from './src/library/CoverCache';
-import type { EpubCacheEntry } from './src/readers/EpubReader';
-import { createSettingsStore, type SettingsStore } from './src/reader/store';
+import { READER_VIEW_TYPE, ReaderView } from './src/obsidian/reader-view';
+import { RReaderSettingsTab } from './src/obsidian/settings-tab';
+import { DEFAULT_SETTINGS, type PluginSettings, type Theme } from './src/lib/settings';
+import { ProgressManager } from './src/lib/progress/progress-manager';
+import { AnnotationManager } from './src/lib/annotations/annotation-manager';
+import type { HighlightColor } from './src/types/annotations';
+import { HIGHLIGHT_COLORS } from './src/types/annotations';
+import { LIBRARY_VIEW_TYPE, LibraryView } from './src/screens/views/library/library-view';
+import { CoverCache } from './src/lib/library/cover-cache';
+import type { EpubCacheEntry } from './src/lib/epub/epub-reader';
+import { createSettingsStore, type SettingsStore } from './src/stores/reader-store';
 import {
   type ReadingData,
   emptyReadingData,
   mergeReadingData,
   normalizeDataPath,
   readingDataFrom,
-} from './src/reading-progress/readingData';
+} from './src/lib/progress/reading-data';
 
 /** data.json. The reading data is left out when it lives in a vault file instead. */
 interface RReaderData extends Partial<ReadingData> {

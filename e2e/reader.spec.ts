@@ -112,6 +112,23 @@ test.describe('EPUB reader: navigation and progress', () => {
     await expect(page.locator('.rr-topbar-title')).toHaveText('Chapter 2: The Lantern');
     expect(await scrollTop(page)).toBeGreaterThan(500);
   });
+
+  // Obsidian hides a background tab with display: none, which zeroes scrollTop and every size.
+  test('switching to another tab and back keeps the place', async ({ page }) => {
+    await open(page, 'view=reader');
+    await scrollBookTo(page, 800);
+    await page.waitForTimeout(900); // let the debounced save land
+    const saved = await progress(page);
+    const leaf = page.locator('.workspace-leaf-content');
+    await leaf.evaluate((el) => ((el as HTMLElement).style.display = 'none'));
+    await page.waitForTimeout(900);
+    expect(await progress(page)).toBe(saved);
+    await leaf.evaluate((el) => ((el as HTMLElement).style.display = ''));
+    await expect.poll(() => scrollTop(page)).toBe(800);
+    const fill = await page.locator('.rr-slider-fill').evaluate((el) => parseFloat((el as HTMLElement).style.width));
+    expect(fill).toBeLessThan(50); // not jumped to the end
+    expect(await progress(page)).toBe(saved);
+  });
 });
 
 test.describe('EPUB reader: panels', () => {

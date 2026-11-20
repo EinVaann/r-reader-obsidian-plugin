@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest';
 import { Notice } from './obsidian-mock';
-import { formatText, renderChapter, trackName, type ArkChapter, type ArkSegment } from '../readers/ark/renderChapter';
-import { ArkInteractions } from '../readers/ark/ArkInteractions';
+import { formatText, renderChapter, trackName, type ArkChapter, type ArkSegment } from '@/lib/ark/render-chapter';
+import { ArkInteractions } from '@/lib/ark/ark-interactions';
 
 const MISSING = new Set(['music:$ekg_loop']);
 const resolve = (id: string): string | null => (MISSING.has(id) || !id ? null : `app://media/${id}`);

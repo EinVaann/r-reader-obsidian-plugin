@@ -29,7 +29,7 @@ await esbuild.build({
   target: "es2022",
   jsx: "automatic",
   define: { "process.env.NODE_ENV": '"development"' },
-  alias: { obsidian: path.join(root, "dev/obsidian-browser.ts") },
+  alias: { obsidian: path.join(root, "dev/obsidian-browser.ts"), "@": path.join(root, "src") },
   // Same as the plugin build: foliate's PDF module is never used.
   plugins: [
     {

@@ -36,31 +36,5 @@
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
-.rr-qs-chip {
-  padding: 3px 10px;
-  border-radius: 6px;
-  background: var(--background-secondary);
-  color: var(--text-normal);
-  cursor: pointer;
-  font-size: 12px;
-  text-transform: capitalize;
-}
-.rr-qs-chip:hover {
-  background: var(--background-modifier-hover);
-}
-.rr-qs-chip.is-active {
-  background: var(--interactive-accent);
-  color: var(--text-on-accent);
-}
-.rr-qs-select {
-  flex: 0 1 auto;
-  max-width: 60%;
-  padding: 3px 6px;
-  border-radius: 6px;
-  background: var(--background-secondary);
-  color: var(--text-normal);
-  border: 1px solid var(--background-modifier-border);
-  font-size: 12px;
-  cursor: pointer;
-}
+
 

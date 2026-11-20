@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from 'vitest';
-import { captureSelection, findRange, snippet, unwrapById, wrapRange } from '../annotations/anchor';
+import { captureSelection, findRange, snippet, unwrapById, wrapRange } from '@/lib/annotations/anchor';
 
 let root: HTMLElement;
 
