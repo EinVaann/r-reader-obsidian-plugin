@@ -1,0 +1,322 @@
+import { App, Notice, PluginSettingTab, Setting } from 'obsidian';
+import type RReaderPlugin from '../../main';
+import type { Theme, ScrollMode, ProgressBarPosition, StoryView } from '@/lib/settings';
+import type { HighlightColor } from '@/types/annotations';
+
+export class RReaderSettingsTab extends PluginSettingTab {
+  plugin: RReaderPlugin;
+
+  constructor(app: App, plugin: RReaderPlugin) {
+    super(app, plugin);
+    this.plugin = plugin;
+  }
+
+  display(): void {
+    const { containerEl } = this;
+    containerEl.empty();
+
+    new Setting(containerEl)
+      .setName('Theme')
+      .setDesc('Reading color scheme ("Follow Obsidian" uses the active app theme)')
+      .addDropdown((d) =>
+        d
+          .addOptions({ obsidian: 'Follow Obsidian', light: 'Light', dark: 'Dark', sepia: 'Sepia' })
+          .setValue(this.plugin.settings.theme)
+          .onChange(async (v) => {
+            this.plugin.settings.theme = v as Theme;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Font size')
+      .setDesc('Font size in pixels (12–36)')
+      .addSlider((s) =>
+        s
+          .setLimits(12, 36, 1)
+          .setValue(this.plugin.settings.fontSize)
+          .setDynamicTooltip()
+          .onChange(async (v) => {
+            this.plugin.settings.fontSize = v;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Line height')
+      .setDesc('Line spacing (1.0–2.5)')
+      .addSlider((s) =>
+        s
+          .setLimits(1.0, 2.5, 0.1)
+          .setValue(this.plugin.settings.lineHeight)
+          .setDynamicTooltip()
+          .onChange(async (v) => {
+            this.plugin.settings.lineHeight = v;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Scroll mode')
+      .setDesc('Continuous scrolling or paginated (EPUB only)')
+      .addDropdown((d) =>
+        d
+          .addOptions({ continuous: 'Continuous', paginated: 'Paginated' })
+          .setValue(this.plugin.settings.scrollMode)
+          .onChange(async (v) => {
+            this.plugin.settings.scrollMode = v as ScrollMode;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Progress bar position (mobile)')
+      .setDesc('A full-width bar under the page, or a side rail with chapter dots and buttons to jump to the previous / next table-of-contents entry. Desktop always uses the bottom bar.')
+      .addDropdown((d) =>
+        d
+          .addOptions({ bottom: 'Bottom', right: 'Side rail' })
+          .setValue(this.plugin.settings.progressBarPosition)
+          .onChange(async (v) => {
+            this.plugin.settings.progressBarPosition = v as ProgressBarPosition;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Touch-to-scroll (mobile)')
+      .setDesc('Tap top/bottom thirds of screen to scroll; tap center to toggle bars')
+      .addToggle((t) =>
+        t
+          .setValue(this.plugin.settings.touchToScroll)
+          .onChange(async (v) => {
+            this.plugin.settings.touchToScroll = v;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Tap scroll distance')
+      .setDesc('How far a tap or page-turn scrolls, measured in screens (0.25–2.0). Default 0.5.')
+      .addSlider((s) =>
+        s
+          .setLimits(0.25, 2.0, 0.25)
+          .setValue(this.plugin.settings.tapScrollScreens)
+          .setDynamicTooltip()
+          .onChange(async (v) => {
+            this.plugin.settings.tapScrollScreens = v;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Tap scroll speed')
+      .setDesc('How long a tap or page-turn scroll takes, in milliseconds. 0 jumps instantly; lower is faster. Default 250.')
+      .addSlider((s) =>
+        s
+          .setLimits(0, 800, 50)
+          .setValue(this.plugin.settings.tapScrollDuration)
+          .setDynamicTooltip()
+          .onChange(async (v) => {
+            this.plugin.settings.tapScrollDuration = v;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Show EPUB files on all devices')
+      .setDesc(
+        'Enables Obsidian\'s "Detect all file extensions" automatically. Because this plugin setting syncs with your vault, EPUB files show up on every device without changing each device\'s own settings.',
+      )
+      .addToggle((t) =>
+        t
+          .setValue(this.plugin.settings.detectAllExtensions)
+          .onChange(async (v) => {
+            this.plugin.settings.detectAllExtensions = v;
+            await this.plugin.saveSettings();
+            this.plugin.applyFileVisibility();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Close menu after chapter jump')
+      .setDesc('When you pick a chapter from the table of contents, close the quick-settings menu after jumping.')
+      .addToggle((t) =>
+        t
+          .setValue(this.plugin.settings.closeMenuAfterTocJump)
+          .onChange(async (v) => {
+            this.plugin.settings.closeMenuAfterTocJump = v;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('No image mode')
+      .setDesc('Render a text placeholder instead of images (faster, less memory). Reopen the book to apply.')
+      .addToggle((t) =>
+        t
+          .setValue(this.plugin.settings.noImageMode)
+          .onChange(async (v) => {
+            this.plugin.settings.noImageMode = v;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Hide bars on mobile')
+      .setDesc('Start in full-screen reading mode; tap the center of the screen to show the bars')
+      .addToggle((t) =>
+        t
+          .setValue(this.plugin.settings.hideBarsOnMobile)
+          .onChange(async (v) => {
+            this.plugin.settings.hideBarsOnMobile = v;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Default highlight color')
+      .setDesc('Color used when you create a highlight (you can recolor any highlight later).')
+      .addDropdown((d) =>
+        d
+          .addOptions({ yellow: 'Yellow', green: 'Green', blue: 'Blue', pink: 'Pink' })
+          .setValue(this.plugin.settings.defaultHighlightColor)
+          .onChange(async (v) => {
+            this.plugin.settings.defaultHighlightColor = v as HighlightColor;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Notes export folder')
+      .setDesc('Vault folder where "Export reading notes" writes a Markdown file per book.')
+      .addText((t) =>
+        t
+          .setPlaceholder('R Reader Notes')
+          .setValue(this.plugin.settings.notesExportFolder)
+          .onChange(async (v) => {
+            this.plugin.settings.notesExportFolder = v;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    this.displayReadingDataSetting(containerEl);
+
+    new Setting(containerEl)
+      .setName('Clear EPUB cache')
+      .setDesc('Books are cached in memory after the first load so re-opening them is instant. Clear this if a book looks wrong or after toggling no-image mode.')
+      .addButton((b) =>
+        b
+          .setButtonText('Clear cache')
+          .onClick(() => {
+            this.plugin.clearEpubCache();
+            new Notice('R Reader: EPUB cache cleared');
+          }),
+      );
+
+    this.displayStorySettings(containerEl);
+  }
+
+  /** Where progress, highlights and bookmarks are saved; applied with a button, not per keystroke. */
+  private displayReadingDataSetting(containerEl: HTMLElement): void {
+    let draft = this.plugin.settings.readingDataPath;
+    const where = (p: string): string => (p ? p : "the plugin's data.json");
+    new Setting(containerEl)
+      .setName('Reading data file')
+      .setDesc(
+        `Vault file for reading progress, highlights and bookmarks. Leave empty to keep them in the plugin's data.json. ` +
+          `If the file already exists, its data is merged in. Currently: ${where(this.plugin.settings.readingDataPath)}.`,
+      )
+      .addText((t) =>
+        t
+          .setPlaceholder('e.g. R Reader/reading-data.json')
+          .setValue(draft)
+          .onChange((v) => {
+            draft = v;
+          }),
+      )
+      .addButton((b) =>
+        b.setButtonText('Move').onClick(async () => {
+          try {
+            await this.plugin.setReadingDataPath(draft);
+            new Notice(`R Reader: reading data now saved to ${where(this.plugin.settings.readingDataPath)}`);
+          } catch (e) {
+            console.error('R Reader: could not switch reading data file', e);
+            new Notice('R Reader: that file could not be read as reading data; nothing was changed.');
+          }
+          this.display();
+        }),
+      );
+  }
+
+  /** Settings that only apply to `.ark` stories, under their own heading. */
+  private displayStorySettings(containerEl: HTMLElement): void {
+    new Setting(containerEl)
+      .setHeading()
+      .setName('Arknights stories (.ark)')
+      .setDesc('Story scripts read in script or visual-novel view.');
+
+    new Setting(containerEl)
+      .setName('Assets folder')
+      .setDesc('Vault folder holding media.json and the images and audio stories use. Reopen a story after changing it.')
+      .addText((t) =>
+        t
+          .setPlaceholder('Arknights Story Assets')
+          .setValue(this.plugin.settings.storyAssetsFolder)
+          .onChange(async (v) => {
+            this.plugin.settings.storyAssetsFolder = v.trim().replace(/\/+$/, '');
+            this.plugin.clearStoryCache();
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Default view')
+      .setDesc('How stories open. Switch any time with the button in the reader\'s top bar.')
+      .addDropdown((d) =>
+        d
+          .addOptions({ script: 'Script (scroll)', vn: 'Visual novel' })
+          .setValue(this.plugin.settings.storyDefaultView)
+          .onChange(async (v) => {
+            this.plugin.settings.storyDefaultView = v as StoryView;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Nickname')
+      .setDesc('Your name wherever the script addresses the Doctor by name.')
+      .addText((t) =>
+        t
+          .setPlaceholder('Doctor')
+          .setValue(this.plugin.settings.storyNickname)
+          .onChange(async (v) => {
+            this.plugin.settings.storyNickname = v.trim() || 'Doctor';
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Text speed')
+      .setDesc('Visual-novel view: letters per second as a line types out. 0 shows each line at once.')
+      .addSlider((s) =>
+        s
+          .setLimits(0, 120, 5)
+          .setValue(this.plugin.settings.storyTextSpeed)
+          .setDynamicTooltip()
+          .onChange(async (v) => {
+            this.plugin.settings.storyTextSpeed = v;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Autoplay music')
+      .setDesc('Script view: play each scene\'s music as you scroll to it. Off: tap a music bar to play it.')
+      .addToggle((t) =>
+        t.setValue(this.plugin.settings.storyAutoplayMusic).onChange(async (v) => {
+          this.plugin.settings.storyAutoplayMusic = v;
+          await this.plugin.saveSettings();
+        }),
+      );
+  }
+}

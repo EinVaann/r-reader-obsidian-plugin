@@ -1,11 +1,11 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Notice, TFile, TFolder } from 'obsidian';
-import { exportBookNotes } from '../export/exportNotes';
-import { openArkBook } from '../readers/ark/arkBook';
-import { focusIndex, formatText, mediaId, trackName, renderChapter, type ArkStory } from '../readers/ark/renderChapter';
-import { VnScript, parseKey, segKey, compareCursor } from '../readers/ark/vn/script';
-import type { BookAnnotations, Highlight } from '../annotations/types';
+import { exportBookNotes } from '@/lib/export/export-notes';
+import { openArkBook } from '@/lib/ark/ark-book';
+import { focusIndex, formatText, mediaId, trackName, renderChapter, type ArkStory } from '@/lib/ark/render-chapter';
+import { VnScript, parseKey, segKey, compareCursor } from '@/lib/ark/vn/script';
+import type { BookAnnotations, Highlight } from '@/types/annotations';
 
 // The runtime mock's TFile/Notice differ from the real typings.
 const TFileMock = TFile as unknown as new (path: string) => TFile;

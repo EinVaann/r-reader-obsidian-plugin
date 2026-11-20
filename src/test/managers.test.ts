@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AnnotationManager, makeId } from '../annotations/AnnotationManager';
-import { HIGHLIGHT_COLORS, emptyAnnotations, type Bookmark, type Highlight } from '../annotations/types';
-import { ProgressManager } from '../reading-progress/ProgressManager';
-import { metaAuthor, metaTitle } from '../util/bookMeta';
-import { DEFAULT_SETTINGS } from '../settings/settings';
-import { createReaderStore, createSettingsStore } from '../reader/store';
+import { AnnotationManager, makeId } from '@/lib/annotations/annotation-manager';
+import { HIGHLIGHT_COLORS, emptyAnnotations, type Bookmark, type Highlight } from '@/types/annotations';
+import { ProgressManager } from '@/lib/progress/progress-manager';
+import { metaAuthor, metaTitle } from '@/lib/book-meta';
+import { DEFAULT_SETTINGS } from '@/lib/settings';
+import { createReaderStore, createSettingsStore } from '@/stores/reader-store';
 
 const plugin = () => ({ persist: vi.fn(async () => {}) }) as never;
 const hl = (id: string, extra: Partial<Highlight> = {}): Highlight => ({

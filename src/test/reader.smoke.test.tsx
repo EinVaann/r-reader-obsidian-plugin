@@ -9,13 +9,13 @@ import { act } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { TFile } from 'obsidian';
 import type { App } from 'obsidian';
-import { mountReact } from '../react/mount';
-import { ReaderApp } from '../reader/ReaderApp';
-import { ReaderContext, type HighlightActions, type ReaderActions, type ReaderContextValue } from '../reader/context';
-import { createReaderStore, createSettingsStore } from '../reader/store';
-import { DEFAULT_SETTINGS } from '../settings/settings';
-import type { Bookmark } from '../annotations/types';
-import type { TocEntry } from '../readers/EpubReader';
+import { mountReact } from '@/obsidian/mount';
+import { ReaderApp } from '@/screens/views/reader/reader-app';
+import { ReaderContext, type HighlightActions, type ReaderActions, type ReaderContextValue } from '@/stores/reader-context';
+import { createReaderStore, createSettingsStore } from '@/stores/reader-store';
+import { DEFAULT_SETTINGS } from '@/lib/settings';
+import type { Bookmark } from '@/types/annotations';
+import type { TocEntry } from '@/lib/epub/epub-reader';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -184,7 +184,7 @@ describe('reader frame', () => {
     const { host, store, calls } = setup();
     act(() => $('[aria-label="Table of contents"]', host)!.click());
     expect($$('.rr-toc-item', host)).toHaveLength(4);
-    expect($$('.rr-toc-item', host)[1].style.paddingLeft).toBe('28px'); // nested entry indents
+    expect(($$('.rr-toc-item', host)[1].firstElementChild as HTMLElement).style.marginLeft).toBe('16px'); // nested entry indents
     act(() => setInput($('.rr-toc-search', host) as HTMLInputElement, 'lantern'));
     expect($$('.rr-toc-item', host).map((b) => b.textContent)).toEqual(['Chapter 2: The Lantern']);
     act(() => $$('.rr-toc-item', host)[0].click());
@@ -217,7 +217,7 @@ describe('reader frame', () => {
     const chip = (text: string) => $$('.rr-qs-chip', host).find((b) => b.textContent === text)!;
     act(() => chip('sepia').click());
     expect(settings.getState().settings.theme).toBe('sepia');
-    expect(chip('sepia').classList.contains('is-active')).toBe(true);
+    expect(chip('sepia').getAttribute('data-state')).toBe('on');
     act(() => chip('+').click());
     expect(settings.getState().settings.fontSize).toBe(DEFAULT_SETTINGS.fontSize + 1);
     expect($('.rr-qs-version', host)!.textContent).toBe('R Reader v9.9.9');
@@ -269,7 +269,7 @@ describe('reader frame', () => {
 
 describe('library', () => {
   it('lists books by folder with recent reads, progress, highlights and lazy covers', async () => {
-    const { LibraryView } = await import('../library/LibraryView');
+    const { LibraryView } = await import('@/screens/views/library/library-view');
     globalThis.IntersectionObserver = class {
       constructor(private cb: IntersectionObserverCallback) {}
       observe(el: Element) {
@@ -327,7 +327,7 @@ describe('library', () => {
   });
 
   it('Arknights tab: stories by storyline in reading order, with recent reads', async () => {
-    const { LibraryView } = await import('../library/LibraryView');
+    const { LibraryView } = await import('@/screens/views/library/library-view');
     const mk = (p: string) => {
       const f = new (TFile as unknown as new (path: string) => TFile)(p);
       const folder = p.split('/').slice(0, -1);

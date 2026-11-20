@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ArkSegment, ArkStory } from '../readers/ark/renderChapter';
-import { VnScript, type Choices, type Frame } from '../readers/ark/vn/script';
-import { VnPlayer } from '../readers/ark/vn/VnPlayer';
+import type { ArkSegment, ArkStory } from '@/lib/ark/render-chapter';
+import { VnScript, type Choices, type Frame } from '@/lib/ark/vn/script';
+import { VnPlayer } from '@/lib/ark/vn/vn-player';
 
 const say = (speaker: string, text: string, extra: Partial<ArkSegment> = {}): ArkSegment => ({ segment_type: 'dialogue', speaker, text, ...extra });
 const dir = (action: string, params: Record<string, unknown> = {}, extra: Partial<ArkSegment> = {}): ArkSegment => ({
