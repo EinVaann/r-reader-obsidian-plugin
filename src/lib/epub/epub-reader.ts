@@ -341,6 +341,8 @@ export class EpubReader implements Reader {
   private setupResizeTracking(): void {
     if (!this.scrollEl || !this.contentEl) return;
     this.resizeObserver = new ResizeObserver(() => {
+      // Hidden (a background tab): keep the anchor; showing the pane fires this again and restores it.
+      if (this.isHidden()) return;
       if (this.anchor && this.scrollEl) {
         // If the viewport itself moved on screen (fullscreen toggle), follow it
         // so the text stays put visually, then re-anchor to the new viewport.
@@ -510,7 +512,8 @@ export class EpubReader implements Reader {
       ticking = true;
       requestAnimationFrame(() => {
         ticking = false;
-        if (!this.scrollEl) return;
+        // Hiding the pane resets scrollTop to 0 and fires a scroll; that's not the reader moving.
+        if (!this.scrollEl || this.isHidden()) return;
         // Skip the echo of our own restore so rounding can't drift the anchor.
         const isEcho = this.restoredTop !== null && Math.abs(this.scrollEl.scrollTop - this.restoredTop) <= 1;
         this.restoredTop = null;
@@ -636,9 +639,14 @@ export class EpubReader implements Reader {
     el.scrollTop = Math.max(0, Math.min(1, fraction)) * max;
   }
 
+  /** The pane isn't laid out (Obsidian hides background tabs with display: none), so every size reads 0. */
+  private isHidden(): boolean {
+    return !this.scrollEl || this.scrollEl.clientHeight === 0;
+  }
+
   private saveProgress(): void {
     const el = this.scrollEl;
-    if (!el) return;
+    if (!el || this.isHidden()) return;
     const max = el.scrollHeight - el.clientHeight;
     const fraction = max > 0 ? el.scrollTop / max : 0;
     void this.progress.save(this.filePath, fraction, this.anchor);
